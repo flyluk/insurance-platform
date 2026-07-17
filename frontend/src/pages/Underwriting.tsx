@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
 
@@ -38,8 +38,10 @@ export default function Underwriting() {
   const [queue, setQueue] = useState<Case[]>([]);
   const [all, setAll] = useState<Case[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectionVersion, setSelectionVersion] = useState(0);
   const [selected, setSelected] = useState<Case | null>(null);
   const [linkedPolicy, setLinkedPolicy] = useState<Policy | null>(null);
+  const selectionRequest = useRef(0);
 
   async function refresh() {
     const [q, c] = await Promise.all([api.get("/uw/queue"), api.get("/uw/cases")]);
@@ -51,31 +53,41 @@ export default function Underwriting() {
     refresh().catch(console.error);
   }, []);
 
-  useEffect(() => {
-    if (!selectedId) {
+  async function loadSelected(id: string | null) {
+    const request = ++selectionRequest.current;
+    if (!id) {
       setSelected(null);
       setLinkedPolicy(null);
       return;
     }
-    api
-      .get(`/uw/cases/${selectedId}`)
-      .then(async ({ data }) => {
-        setSelected(data);
-        if (data.final_decision === "ACCEPT") {
-          const policies = await api.get("/policies");
-          const match = (policies.data as Policy[]).find((p) => p.application_id === data.application_id) || null;
-          setLinkedPolicy(match);
-        } else {
-          setLinkedPolicy(null);
-        }
-      })
-      .catch(console.error);
-  }, [selectedId]);
+
+    try {
+      const { data } = await api.get(`/uw/cases/${id}`);
+      let policy: Policy | null = null;
+      if (data.final_decision === "ACCEPT") {
+        const policies = await api.get("/policies");
+        policy = (policies.data as Policy[]).find((p) => p.application_id === data.application_id) || null;
+      }
+      if (request !== selectionRequest.current) return;
+      setSelected(data);
+      setLinkedPolicy(policy);
+    } catch (error) {
+      if (request === selectionRequest.current) console.error(error);
+    }
+  }
+
+  useEffect(() => {
+    loadSelected(selectedId);
+    return () => {
+      selectionRequest.current += 1;
+    };
+  }, [selectedId, selectionVersion]);
 
   async function decide(id: string, decision: "ACCEPT" | "DECLINE") {
     await api.post(`/uw/cases/${id}/decide`, { decision, reason: `Manual ${decision}` });
     await refresh();
     setSelectedId(id);
+    setSelectionVersion((version) => version + 1);
   }
 
   return (

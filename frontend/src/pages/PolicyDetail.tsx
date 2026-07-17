@@ -44,18 +44,32 @@ export default function PolicyDetail() {
   const [endorseDesc, setEndorseDesc] = useState("Increase coverage");
   const [premiumDelta, setPremiumDelta] = useState(50);
 
-  async function refresh() {
+  async function refresh(isCurrent: () => boolean = () => true) {
     if (!id) return;
     const [p, e] = await Promise.all([
       api.get(`/policies/${id}`),
-      api.get(`/policies/${id}/endorsements`),
+      api.get(`/policies/${id}/endorsements`).catch((endorsementsError) => {
+        console.error(endorsementsError);
+        return null;
+      }),
     ]);
+    if (!isCurrent()) return;
     setPolicy(p.data);
-    setEndorsements(e.data);
+    if (e) setEndorsements(e.data);
+    setError("");
   }
 
   useEffect(() => {
-    refresh().catch(() => setError("Policy not found"));
+    let current = true;
+    setPolicy(null);
+    setEndorsements([]);
+    setError("");
+    refresh(() => current).catch(() => {
+      if (current) setError("Policy not found");
+    });
+    return () => {
+      current = false;
+    };
   }, [id]);
 
   async function renew() {
