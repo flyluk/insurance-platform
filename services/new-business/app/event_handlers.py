@@ -23,7 +23,9 @@ def handle_domain_event(event: dict) -> None:
             app_id = payload.get("application_id") or event["aggregate_id"]
             app = db.get(Application, app_id)
             if not app:
-                return
+                # Raise so the Kafka consumer does not commit; the event can retry
+                # once the application exists (or the missing-app condition is resolved).
+                raise LookupError(f"Application not found for UnderwritingDecided: {app_id}")
             decision = payload.get("decision")
             app.uw_decision = decision
             app.uw_reason = payload.get("reason")
