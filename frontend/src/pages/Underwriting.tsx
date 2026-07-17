@@ -63,14 +63,14 @@ export default function Underwriting() {
 
     try {
       const { data } = await api.get(`/uw/cases/${id}`);
-      let policy: Policy | null = null;
-      if (data.final_decision === "ACCEPT") {
-        const policies = await api.get("/policies");
-        policy = (policies.data as Policy[]).find((p) => p.application_id === data.application_id) || null;
-      }
       if (request !== selectionRequest.current) return;
       setSelected(data);
-      setLinkedPolicy(policy);
+      setLinkedPolicy(null);
+      if (data.final_decision === "ACCEPT") {
+        const policies = await api.get("/policies");
+        if (request !== selectionRequest.current) return;
+        setLinkedPolicy((policies.data as Policy[]).find((p) => p.application_id === data.application_id) || null);
+      }
     } catch (error) {
       if (request === selectionRequest.current) console.error(error);
     }

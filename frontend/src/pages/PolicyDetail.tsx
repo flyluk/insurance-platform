@@ -55,7 +55,7 @@ export default function PolicyDetail() {
     ]);
     if (!isCurrent()) return;
     setPolicy(p.data);
-    if (e) setEndorsements(e.data);
+    setEndorsements(e ? e.data : []);
     setError("");
   }
 
