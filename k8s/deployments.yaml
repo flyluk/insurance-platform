@@ -34,11 +34,16 @@ spec:
                 secretKeyRef:
                   name: insurance-secrets
                   key: JWT_SECRET
-            - name: UNDERWRITING_EVENTS_URL
+            - name: KAFKA_BOOTSTRAP_SERVERS
               valueFrom:
                 configMapKeyRef:
                   name: insurance-config
-                  key: UNDERWRITING_EVENTS_URL
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: KAFKA_DOMAIN_EVENTS_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_DOMAIN_EVENTS_TOPIC
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -115,16 +120,16 @@ spec:
                 secretKeyRef:
                   name: insurance-secrets
                   key: JWT_SECRET
-            - name: NEW_BUSINESS_EVENTS_URL
+            - name: KAFKA_BOOTSTRAP_SERVERS
               valueFrom:
                 configMapKeyRef:
                   name: insurance-config
-                  key: NEW_BUSINESS_EVENTS_URL
-            - name: POLICY_ADMIN_EVENTS_URL
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: KAFKA_DOMAIN_EVENTS_TOPIC
               valueFrom:
                 configMapKeyRef:
                   name: insurance-config
-                  key: POLICY_ADMIN_EVENTS_URL
+                  key: KAFKA_DOMAIN_EVENTS_TOPIC
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -201,16 +206,16 @@ spec:
                 secretKeyRef:
                   name: insurance-secrets
                   key: JWT_SECRET
-            - name: NEW_BUSINESS_EVENTS_URL
+            - name: KAFKA_BOOTSTRAP_SERVERS
               valueFrom:
                 configMapKeyRef:
                   name: insurance-config
-                  key: NEW_BUSINESS_EVENTS_URL
-            - name: FINANCE_EVENTS_URL
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: KAFKA_DOMAIN_EVENTS_TOPIC
               valueFrom:
                 configMapKeyRef:
                   name: insurance-config
-                  key: FINANCE_EVENTS_URL
+                  key: KAFKA_DOMAIN_EVENTS_TOPIC
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -287,11 +292,16 @@ spec:
                 secretKeyRef:
                   name: insurance-secrets
                   key: JWT_SECRET
-            - name: FINANCE_EVENTS_URL
+            - name: KAFKA_BOOTSTRAP_SERVERS
               valueFrom:
                 configMapKeyRef:
                   name: insurance-config
-                  key: FINANCE_EVENTS_URL
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: KAFKA_DOMAIN_EVENTS_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_DOMAIN_EVENTS_TOPIC
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -368,6 +378,16 @@ spec:
                 secretKeyRef:
                   name: insurance-secrets
                   key: JWT_SECRET
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: KAFKA_DOMAIN_EVENTS_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_DOMAIN_EVENTS_TOPIC
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:

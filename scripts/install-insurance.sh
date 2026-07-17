@@ -58,6 +58,18 @@ kubectl wait --for=condition=ready pod \
   -n "${NAMESPACE}" \
   --timeout=300s
 
+echo ""
+echo "Step 2b/6: Deploying Kafka (apache/kafka)..."
+# Remove failed Bitnami Helm release if present (image no longer on Docker Hub)
+helm uninstall insurance-kafka -n "${NAMESPACE}" 2>/dev/null || true
+kubectl delete job insurance-kafka-topic-init -n "${NAMESPACE}" --ignore-not-found
+kubectl apply -f "${ROOT_DIR}/k8s/kafka.yaml"
+
+echo "Waiting for Kafka..."
+kubectl rollout status deployment/insurance-kafka -n "${NAMESPACE}" --timeout=300s
+kubectl wait --for=condition=complete job/insurance-kafka-topic-init \
+  -n "${NAMESPACE}" --timeout=180s || true
+
 POSTGRES_HOST="${RELEASE}-postgresql.${NAMESPACE}.svc.cluster.local"
 mkurl() { echo "postgresql://insurance:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/$1"; }
 
@@ -105,6 +117,7 @@ import_img "insurance-web:latest"
 
 echo ""
 echo "Step 5/6: Deploying services..."
+kubectl apply -f "${ROOT_DIR}/k8s/kafka.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/deployments.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/grafana-dashboard.yaml" 2>/dev/null || true
 kubectl apply -f "${ROOT_DIR}/k8s/servicemonitor.yaml" 2>/dev/null || true

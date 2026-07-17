@@ -5,9 +5,8 @@ from app.config import settings
 from app.database import get_db
 from app.models import UnderwritingCase
 from app.schemas import CaseOut, DecisionIn, DomainEventIn
-from app.rules import evaluate
 from insurance_shared.auth import make_auth_dependency
-from insurance_shared.events import already_processed, enqueue_event, mark_processed
+from insurance_shared.events import enqueue_event
 from insurance_shared.metrics import record_event
 
 router = APIRouter(tags=["underwriting"])
@@ -32,64 +31,15 @@ def _emit_decision(db: Session, case: UnderwritingCase) -> None:
         aggregate_type="application",
         aggregate_id=case.application_id,
         payload=payload,
-        destination_url=settings.new_business_events_url,
     )
-    if case.final_decision == "ACCEPT":
-        enqueue_event(
-            db,
-            event_type="UnderwritingDecided",
-            aggregate_type="application",
-            aggregate_id=case.application_id,
-            payload=payload,
-            destination_url=settings.policy_admin_events_url,
-        )
     record_event("UnderwritingDecided", "produced", settings.service_name)
 
 
 @router.post("/events")
 def consume_event(body: DomainEventIn, db: Session = Depends(get_db)):
-    if already_processed(db, body.event_id):
-        return {"status": "duplicate"}
+    from app.event_handlers import handle_domain_event
 
-    if body.event_type == "ApplicationSubmitted":
-        existing = (
-            db.query(UnderwritingCase)
-            .filter(UnderwritingCase.application_id == body.payload["application_id"])
-            .first()
-        )
-        if existing:
-            mark_processed(db, body.event_id, body.event_type)
-            db.commit()
-            return {"status": "exists"}
-
-        decision, reason = evaluate(
-            body.payload["product_code"],
-            body.payload.get("risk_attributes") or {},
-            float(body.payload["annual_premium"]),
-        )
-        case = UnderwritingCase(
-            application_id=body.payload["application_id"],
-            party_id=body.payload["party_id"],
-            product_code=body.payload["product_code"],
-            annual_premium=float(body.payload["annual_premium"]),
-            risk_attributes=body.payload.get("risk_attributes") or {},
-            auto_decision=decision,
-            reason=reason,
-        )
-        if decision == "REFER":
-            case.status = "REFERRED"
-            case.final_decision = None
-        else:
-            case.status = "ACCEPTED" if decision == "ACCEPT" else "DECLINED"
-            case.final_decision = decision
-        db.add(case)
-        db.flush()
-        if case.final_decision:
-            _emit_decision(db, case)
-        record_event("ApplicationSubmitted", "consumed", settings.service_name)
-
-    mark_processed(db, body.event_id, body.event_type)
-    db.commit()
+    handle_domain_event(body.model_dump())
     return {"status": "ok"}
 
 

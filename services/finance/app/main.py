@@ -4,18 +4,28 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import Base, engine
+from app.database import Base, SessionLocal, engine
+from app.event_handlers import HANDLED_TYPES, handle_domain_event
 from app.models import ClaimDisbursement, Invoice, JournalEntry, JournalLine, Payment  # noqa: F401
-from app.routers import finance
+from app.routers import events, finance
 from insurance_shared.events import OutboxBase
 from insurance_shared.metrics import PrometheusMiddleware, metrics_response
+from insurance_shared.runtime import event_runtime
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     OutboxBase.metadata.create_all(bind=engine)
-    yield
+    async with event_runtime(
+        SessionLocal,
+        poll_seconds=settings.outbox_poll_seconds,
+        enable_outbox=False,
+        consumer_group=settings.service_name,
+        handled_types=HANDLED_TYPES,
+        handler=handle_domain_event,
+    ):
+        yield
 
 
 app = FastAPI(title="Finance Service", lifespan=lifespan)

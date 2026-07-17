@@ -1,3 +1,8 @@
+# Shared env for Kafka (read via insurance_shared.events helpers)
+x-kafka-env: &kafka_env
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KAFKA_DOMAIN_EVENTS_TOPIC: insurance.domain.events
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -16,21 +21,47 @@ services:
       timeout: 5s
       retries: 10
 
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_NUM_PARTITIONS: "3"
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
   new-business:
     build:
       context: .
       dockerfile: services/new-business/Dockerfile
     environment:
+      <<: *kafka_env
       JWT_SECRET: local-dev-secret-change-me
       UVICORN_WORKERS: "1"
       DB_POOL_SIZE: "5"
       DB_MAX_OVERFLOW: "8"
       DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/nb_db
-      UNDERWRITING_EVENTS_URL: http://underwriting:8000/events
     ports:
       - "8001:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   underwriting:
@@ -38,15 +69,16 @@ services:
       context: .
       dockerfile: services/underwriting/Dockerfile
     environment:
+      <<: *kafka_env
       JWT_SECRET: local-dev-secret-change-me
       UVICORN_WORKERS: "1"
       DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/uw_db
-      NEW_BUSINESS_EVENTS_URL: http://new-business:8000/events
-      POLICY_ADMIN_EVENTS_URL: http://policy-admin:8000/events
     ports:
       - "8002:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   policy-admin:
@@ -54,15 +86,16 @@ services:
       context: .
       dockerfile: services/policy-admin/Dockerfile
     environment:
+      <<: *kafka_env
       JWT_SECRET: local-dev-secret-change-me
       UVICORN_WORKERS: "1"
       DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/policy_db
-      NEW_BUSINESS_EVENTS_URL: http://new-business:8000/events
-      FINANCE_EVENTS_URL: http://finance:8000/events
     ports:
       - "8003:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   claims:
@@ -70,14 +103,16 @@ services:
       context: .
       dockerfile: services/claims/Dockerfile
     environment:
+      <<: *kafka_env
       JWT_SECRET: local-dev-secret-change-me
       UVICORN_WORKERS: "1"
       DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/claims_db
-      FINANCE_EVENTS_URL: http://finance:8000/events
     ports:
       - "8004:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   finance:
@@ -85,6 +120,7 @@ services:
       context: .
       dockerfile: services/finance/Dockerfile
     environment:
+      <<: *kafka_env
       JWT_SECRET: local-dev-secret-change-me
       UVICORN_WORKERS: "1"
       DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/finance_db
@@ -92,6 +128,8 @@ services:
       - "8005:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   gateway:

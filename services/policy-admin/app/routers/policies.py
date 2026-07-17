@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models import Endorsement, Policy
 from app.schemas import DomainEventIn, EndorsementCreate, EndorsementOut, PolicyOut
 from insurance_shared.auth import make_auth_dependency
-from insurance_shared.events import already_processed, enqueue_event, mark_processed
+from insurance_shared.events import enqueue_event
 from insurance_shared.metrics import record_event
 
 router = APIRouter(tags=["policy-admin"])
@@ -38,7 +38,6 @@ def _emit_bound(db: Session, policy: Policy) -> None:
         aggregate_type="policy",
         aggregate_id=policy.id,
         payload=payload,
-        destination_url=settings.new_business_events_url,
     )
     enqueue_event(
         db,
@@ -46,7 +45,6 @@ def _emit_bound(db: Session, policy: Policy) -> None:
         aggregate_type="policy",
         aggregate_id=policy.id,
         payload={**payload, "amount": policy.annual_premium, "invoice_type": "PREMIUM"},
-        destination_url=settings.finance_events_url,
     )
     record_event("PolicyBound", "produced", settings.service_name)
     record_event("PremiumDue", "produced", settings.service_name)
@@ -54,32 +52,9 @@ def _emit_bound(db: Session, policy: Policy) -> None:
 
 @router.post("/events")
 def consume_event(body: DomainEventIn, db: Session = Depends(get_db)):
-    if already_processed(db, body.event_id):
-        return {"status": "duplicate"}
+    from app.event_handlers import handle_domain_event
 
-    if body.event_type == "UnderwritingDecided" and body.payload.get("decision") == "ACCEPT":
-        app_id = body.payload["application_id"]
-        existing = db.query(Policy).filter(Policy.application_id == app_id).first()
-        if not existing:
-            now = datetime.now(timezone.utc)
-            policy = Policy(
-                policy_number=_policy_number(body.payload["product_code"]),
-                application_id=app_id,
-                party_id=body.payload["party_id"],
-                product_code=body.payload["product_code"],
-                status="ACTIVE",
-                annual_premium=float(body.payload["annual_premium"]),
-                risk_attributes=body.payload.get("risk_attributes") or {},
-                effective_date=now,
-                expiry_date=now + timedelta(days=365),
-            )
-            db.add(policy)
-            db.flush()
-            _emit_bound(db, policy)
-            record_event("UnderwritingDecided", "consumed", settings.service_name)
-
-    mark_processed(db, body.event_id, body.event_type)
-    db.commit()
+    handle_domain_event(body.model_dump())
     return {"status": "ok"}
 
 
@@ -129,7 +104,6 @@ def endorse(policy_id: str, body: EndorsementCreate, db: Session = Depends(get_d
                 "invoice_type": "ENDORSEMENT",
                 "endorsement_id": end.id,
             },
-            destination_url=settings.finance_events_url,
         )
     db.commit()
     db.refresh(policy)
@@ -158,7 +132,6 @@ def renew(policy_id: str, db: Session = Depends(get_db), _=Depends(agent_auth)):
             "effective_date": policy.effective_date.isoformat(),
             "expiry_date": policy.expiry_date.isoformat(),
         },
-        destination_url=settings.finance_events_url,
     )
     db.commit()
     db.refresh(policy)

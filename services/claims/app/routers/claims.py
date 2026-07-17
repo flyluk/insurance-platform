@@ -93,7 +93,6 @@ def settle(claim_id: str, body: SettleIn, db: Session = Depends(get_db), _=Depen
             "product_code": claim.product_code,
             "amount": body.settlement_amount,
         },
-        destination_url=settings.finance_events_url,
     )
     record_event("ClaimPaymentRequested", "produced", settings.service_name)
     db.commit()
