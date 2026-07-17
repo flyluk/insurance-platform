@@ -115,7 +115,6 @@ def submit_application(quote_id: str, db: Session = Depends(get_db), _=Depends(a
         aggregate_type="application",
         aggregate_id=app.id,
         payload=payload,
-        destination_url=settings.underwriting_events_url,
     )
     record_event("ApplicationSubmitted", "produced", settings.service_name)
     db.commit()

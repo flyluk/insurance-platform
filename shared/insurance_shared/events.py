@@ -1,19 +1,21 @@
-"""Postgres outbox helpers and HTTP event delivery."""
+"""Postgres outbox + Kafka domain event bus."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-import httpx
 from sqlalchemy import Boolean, DateTime, String, Text, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_TOPIC = "insurance.domain.events"
 
 
 class OutboxBase(DeclarativeBase):
@@ -28,7 +30,7 @@ class OutboxEvent(OutboxBase):
     aggregate_type: Mapped[str] = mapped_column(String(64), nullable=False)
     aggregate_id: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
-    destination_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    destination_url: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     published: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -46,6 +48,31 @@ class ProcessedEvent(OutboxBase):
     )
 
 
+def kafka_bootstrap() -> str:
+    return os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+
+
+def kafka_topic() -> str:
+    return os.getenv("KAFKA_DOMAIN_EVENTS_TOPIC", DEFAULT_TOPIC)
+
+
+def event_envelope(
+    *,
+    event_id: str,
+    event_type: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "event_id": event_id,
+        "event_type": event_type,
+        "aggregate_type": aggregate_type,
+        "aggregate_id": aggregate_id,
+        "payload": payload,
+    }
+
+
 def enqueue_event(
     db: Session,
     *,
@@ -53,8 +80,8 @@ def enqueue_event(
     aggregate_type: str,
     aggregate_id: str,
     payload: dict[str, Any],
-    destination_url: str,
     event_id: str | None = None,
+    destination_url: str = "",
 ) -> OutboxEvent:
     evt = OutboxEvent(
         id=event_id or str(uuid.uuid4()),
@@ -78,9 +105,16 @@ def mark_processed(db: Session, event_id: str, event_type: str) -> None:
 
 
 async def publish_pending(db_factory, batch_size: int = 20) -> int:
-    """Publish unpublished outbox rows. db_factory yields a Session."""
+    """Publish unpublished outbox rows to Kafka."""
+    from aiokafka import AIOKafkaProducer
+
     published = 0
     db: Session = db_factory()
+    producer = AIOKafkaProducer(
+        bootstrap_servers=kafka_bootstrap(),
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    )
+    await producer.start()
     try:
         rows = (
             db.execute(
@@ -92,33 +126,24 @@ async def publish_pending(db_factory, batch_size: int = 20) -> int:
             .scalars()
             .all()
         )
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            for row in rows:
-                body = {
-                    "event_id": row.id,
-                    "event_type": row.event_type,
-                    "aggregate_type": row.aggregate_type,
-                    "aggregate_id": row.aggregate_id,
-                    "payload": json.loads(row.payload),
-                }
-                try:
-                    resp = await client.post(row.destination_url, json=body)
-                    if resp.status_code < 300:
-                        row.published = True
-                        row.published_at = datetime.now(timezone.utc)
-                        published += 1
-                    else:
-                        logger.warning(
-                            "Outbox publish failed %s -> %s status=%s body=%s",
-                            row.id,
-                            row.destination_url,
-                            resp.status_code,
-                            resp.text[:200],
-                        )
-                except Exception:
-                    logger.exception("Outbox publish error for %s", row.id)
+        for row in rows:
+            body = event_envelope(
+                event_id=row.id,
+                event_type=row.event_type,
+                aggregate_type=row.aggregate_type,
+                aggregate_id=row.aggregate_id,
+                payload=json.loads(row.payload),
+            )
+            try:
+                await producer.send_and_wait(kafka_topic(), body, key=row.event_type.encode())
+                row.published = True
+                row.published_at = datetime.now(timezone.utc)
+                published += 1
+            except Exception:
+                logger.exception("Kafka publish failed for outbox %s", row.id)
         db.commit()
     finally:
+        await producer.stop()
         db.close()
     return published
 

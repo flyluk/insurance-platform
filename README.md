@@ -7,6 +7,7 @@ Multi-product (AUTO / HOME / LIFE) insurance microservices on Python FastAPI, Po
 ```
 insurance namespace
 ├── PostgreSQL (Bitnami Helm) — nb_db, uw_db, policy_db, claims_db, finance_db, identity_db
+├── Kafka (apache/kafka KRaft) — topic insurance.domain.events
 ├── new-business ×2
 ├── underwriting ×2
 ├── policy-admin ×2
@@ -20,9 +21,11 @@ monitoring namespace
 └── Grafana ← Insurance Platform dashboard
 ```
 
-Domain events use a Postgres outbox + HTTP delivery (no Kafka):
+Domain events use a **Postgres outbox → Kafka** pattern:
 
 `ApplicationSubmitted` → UW → `UnderwritingDecided` → Policy Admin (bind) + New Business (status) → `PremiumDue` / `PolicyBound` → Finance / New Business. Claims emit `ClaimPaymentRequested` → Finance.
+
+Topic: `insurance.domain.events` (one message per event; each service consumes with its own consumer group).
 
 ## Local development
 
