@@ -6,6 +6,7 @@ import Home from "./pages/Home";
 import Quotes from "./pages/Quotes";
 import Underwriting from "./pages/Underwriting";
 import Policies from "./pages/Policies";
+import PolicyDetail from "./pages/PolicyDetail";
 import Claims from "./pages/Claims";
 import Finance from "./pages/Finance";
 
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="quotes" element={<Quotes />} />
         <Route path="underwriting" element={<Underwriting />} />
         <Route path="policies" element={<Policies />} />
+        <Route path="policies/:id" element={<PolicyDetail />} />
         <Route path="claims" element={<Claims />} />
         <Route path="finance" element={<Finance />} />
       </Route>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../api/client";
 
 type Policy = {
@@ -24,25 +25,6 @@ export default function Policies() {
     refresh().catch(console.error);
   }, []);
 
-  async function renew(id: string) {
-    await api.post(`/policies/${id}/renew`);
-    await refresh();
-  }
-
-  async function cancel(id: string) {
-    await api.post(`/policies/${id}/cancel`);
-    await refresh();
-  }
-
-  async function endorse(id: string) {
-    await api.post(`/policies/${id}/endorse`, {
-      endorsement_type: "COVERAGE_UPDATE",
-      description: "Increase coverage",
-      premium_delta: 50,
-    });
-    await refresh();
-  }
-
   return (
     <div className="stack">
       <div className="hero">
@@ -64,7 +46,11 @@ export default function Policies() {
           <tbody>
             {policies.map((p) => (
               <tr key={p.id}>
-                <td>{p.policy_number}</td>
+                <td>
+                  <Link className="linkish" to={`/policies/${p.id}`}>
+                    {p.policy_number}
+                  </Link>
+                </td>
                 <td>{p.product_code}</td>
                 <td>
                   <span className={`badge ${p.status !== "ACTIVE" ? "bad" : ""}`}>{p.status}</span>
@@ -73,23 +59,20 @@ export default function Policies() {
                 <td className="muted">
                   {p.effective_date.slice(0, 10)} → {p.expiry_date.slice(0, 10)}
                 </td>
-                <td className="row">
-                  {p.status === "ACTIVE" && (
-                    <>
-                      <button className="btn ghost" type="button" onClick={() => endorse(p.id)}>
-                        Endorse +$50
-                      </button>
-                      <button className="btn" type="button" onClick={() => renew(p.id)}>
-                        Renew
-                      </button>
-                      <button className="btn danger" type="button" onClick={() => cancel(p.id)}>
-                        Cancel
-                      </button>
-                    </>
-                  )}
+                <td>
+                  <Link className="btn ghost" to={`/policies/${p.id}`}>
+                    View
+                  </Link>
                 </td>
               </tr>
             ))}
+            {!policies.length && (
+              <tr>
+                <td colSpan={6} className="muted">
+                  No policies yet
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
