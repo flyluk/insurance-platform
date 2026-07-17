@@ -43,7 +43,7 @@ kubectl apply -f "${ROOT_DIR}/k8s/configmap.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/kafka.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/deployments.yaml"
 
-kubectl rollout status deployment/insurance-kafka -n "${NAMESPACE}" --timeout=180s || true
+kubectl rollout status deployment/insurance-kafka -n "${NAMESPACE}" --timeout=180s
 
 for dep in new-business underwriting policy-admin claims finance gateway web; do
   kubectl rollout restart "deployment/${dep}" -n "${NAMESPACE}"
