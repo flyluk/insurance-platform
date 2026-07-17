@@ -1,0 +1,33 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "panels": [
+    {
+      "title": "HTTP request rate by service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (service) (rate(http_requests_total[5m]))",
+          "legendFormat": "{{service}}"
+        }
+      ]
+    },
+    {
+      "title": "Domain events",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (event_type, direction, service) (rate(insurance_domain_events_total[5m]))",
+          "legendFormat": "{{service}} {{direction}} {{event_type}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["insurance"],
+  "title": "Insurance Platform",
+  "uid": "insurance-platform",
+  "version": 1
+}

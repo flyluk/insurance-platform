@@ -1,0 +1,128 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: insurance
+      POSTGRES_PASSWORD: insurancepass
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init-databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U insurance -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  new-business:
+    build:
+      context: .
+      dockerfile: services/new-business/Dockerfile
+    environment:
+      JWT_SECRET: local-dev-secret-change-me
+      UVICORN_WORKERS: "1"
+      DB_POOL_SIZE: "5"
+      DB_MAX_OVERFLOW: "8"
+      DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/nb_db
+      UNDERWRITING_EVENTS_URL: http://underwriting:8000/events
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  underwriting:
+    build:
+      context: .
+      dockerfile: services/underwriting/Dockerfile
+    environment:
+      JWT_SECRET: local-dev-secret-change-me
+      UVICORN_WORKERS: "1"
+      DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/uw_db
+      NEW_BUSINESS_EVENTS_URL: http://new-business:8000/events
+      POLICY_ADMIN_EVENTS_URL: http://policy-admin:8000/events
+    ports:
+      - "8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  policy-admin:
+    build:
+      context: .
+      dockerfile: services/policy-admin/Dockerfile
+    environment:
+      JWT_SECRET: local-dev-secret-change-me
+      UVICORN_WORKERS: "1"
+      DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/policy_db
+      NEW_BUSINESS_EVENTS_URL: http://new-business:8000/events
+      FINANCE_EVENTS_URL: http://finance:8000/events
+    ports:
+      - "8003:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  claims:
+    build:
+      context: .
+      dockerfile: services/claims/Dockerfile
+    environment:
+      JWT_SECRET: local-dev-secret-change-me
+      UVICORN_WORKERS: "1"
+      DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/claims_db
+      FINANCE_EVENTS_URL: http://finance:8000/events
+    ports:
+      - "8004:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  finance:
+    build:
+      context: .
+      dockerfile: services/finance/Dockerfile
+    environment:
+      JWT_SECRET: local-dev-secret-change-me
+      UVICORN_WORKERS: "1"
+      DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/finance_db
+    ports:
+      - "8005:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      JWT_SECRET: local-dev-secret-change-me
+      UVICORN_WORKERS: "1"
+      DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/identity_db
+      NEW_BUSINESS_URL: http://new-business:8000
+      UNDERWRITING_URL: http://underwriting:8000
+      POLICY_ADMIN_URL: http://policy-admin:8000
+      CLAIMS_URL: http://claims:8000
+      FINANCE_URL: http://finance:8000
+    ports:
+      - "8090:8000"
+    depends_on:
+      - new-business
+      - underwriting
+      - policy-admin
+      - claims
+      - finance
+
+  web:
+    build:
+      context: ./frontend
+    ports:
+      - "8088:80"
+    depends_on:
+      - gateway
+
+volumes:
+  postgres_data:

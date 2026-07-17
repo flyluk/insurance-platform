@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: insurance-services
+  namespace: insurance
+  labels:
+    release: kube-prometheus
+spec:
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - new-business
+          - underwriting
+          - policy-admin
+          - claims
+          - finance
+          - gateway
+  namespaceSelector:
+    matchNames:
+      - insurance
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

@@ -1,0 +1,558 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: new-business
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: new-business
+  template:
+    metadata:
+      labels:
+        app: new-business
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          image: insurance-new-business:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: NB_DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: JWT_SECRET
+            - name: UNDERWRITING_EVENTS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: UNDERWRITING_EVENTS_URL
+            - name: UVICORN_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: UVICORN_WORKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: new-business
+  namespace: insurance
+  labels:
+    app: new-business
+spec:
+  selector:
+    app: new-business
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: underwriting
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: underwriting
+  template:
+    metadata:
+      labels:
+        app: underwriting
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          image: insurance-underwriting:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: UW_DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: JWT_SECRET
+            - name: NEW_BUSINESS_EVENTS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: NEW_BUSINESS_EVENTS_URL
+            - name: POLICY_ADMIN_EVENTS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: POLICY_ADMIN_EVENTS_URL
+            - name: UVICORN_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: UVICORN_WORKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: underwriting
+  namespace: insurance
+  labels:
+    app: underwriting
+spec:
+  selector:
+    app: underwriting
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-admin
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: policy-admin
+  template:
+    metadata:
+      labels:
+        app: policy-admin
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          image: insurance-policy-admin:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: POLICY_DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: JWT_SECRET
+            - name: NEW_BUSINESS_EVENTS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: NEW_BUSINESS_EVENTS_URL
+            - name: FINANCE_EVENTS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: FINANCE_EVENTS_URL
+            - name: UVICORN_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: UVICORN_WORKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: policy-admin
+  namespace: insurance
+  labels:
+    app: policy-admin
+spec:
+  selector:
+    app: policy-admin
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claims
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: claims
+  template:
+    metadata:
+      labels:
+        app: claims
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          image: insurance-claims:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: CLAIMS_DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: JWT_SECRET
+            - name: FINANCE_EVENTS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: FINANCE_EVENTS_URL
+            - name: UVICORN_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: UVICORN_WORKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claims
+  namespace: insurance
+  labels:
+    app: claims
+spec:
+  selector:
+    app: claims
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: finance
+  template:
+    metadata:
+      labels:
+        app: finance
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          image: insurance-finance:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: FINANCE_DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: JWT_SECRET
+            - name: UVICORN_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: UVICORN_WORKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: finance
+  namespace: insurance
+  labels:
+    app: finance
+spec:
+  selector:
+    app: finance
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          image: insurance-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: IDENTITY_DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: JWT_SECRET
+            - name: NEW_BUSINESS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: NEW_BUSINESS_URL
+            - name: UNDERWRITING_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: UNDERWRITING_URL
+            - name: POLICY_ADMIN_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: POLICY_ADMIN_URL
+            - name: CLAIMS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: CLAIMS_URL
+            - name: FINANCE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: FINANCE_URL
+            - name: UVICORN_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: UVICORN_WORKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: insurance
+  labels:
+    app: gateway
+spec:
+  selector:
+    app: gateway
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: insurance-web:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "250m"
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: insurance
+spec:
+  type: LoadBalancer
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 80
