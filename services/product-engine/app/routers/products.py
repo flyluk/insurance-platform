@@ -532,13 +532,13 @@ def evaluate_uw(body: EvaluateUwIn, db: Session = Depends(get_db)):
             .first()
         )
 
-    raw_rules = plan.uw_rules if plan else None
-    # Empty {"decline":[],"refer":[]} is truthy but has no thresholds — use product defaults.
-    if not raw_rules or not (raw_rules.get("decline") or raw_rules.get("refer")):
-        code = (plan.product_code if plan else body.product_code or "").upper()
-        rules = UW_RULES.get(code, {"decline": [], "refer": []})
+    # Respect stored plan rules, including intentional empty {"decline":[],"refer":[]}
+    # (auto-bind all). Only fall back to product UW_RULES when no plan is resolved.
+    if plan is not None:
+        rules = plan.uw_rules if plan.uw_rules is not None else {"decline": [], "refer": []}
     else:
-        rules = raw_rules
+        code = (body.product_code or "").upper()
+        rules = UW_RULES.get(code, {"decline": [], "refer": []})
     decision, reason = evaluate_uw_rules(
         rules,
         body.risk_attributes,

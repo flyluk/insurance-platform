@@ -260,6 +260,49 @@ def test_evaluate_uw_accepts_clean_auto(api_client, agent_headers):
     assert body["decision"] == "ACCEPT"
 
 
+def test_evaluate_uw_respects_empty_plan_rules(api_client):
+    """Empty plan uw_rules mean auto-bind; do not fall back to product UW_RULES."""
+    headers = _auth_headers(api_client, "product")
+    code = f"T-{unique_email('uw')[:8].upper()}"
+    create = api_client.post(
+        "/api/products/plans",
+        headers=headers,
+        json={
+            "product_code": "AUTO",
+            "code": code,
+            "name": "Auto-bind Plan",
+            "base_premium": 900,
+            "uw_rules": {"decline": [], "refer": []},
+        },
+    )
+    assert create.status_code == 200
+    plan = create.json()
+    assert plan["uw_rules"] == {"decline": [], "refer": []}
+
+    published = api_client.post(f"/api/products/plans/{plan['id']}/publish", headers=headers)
+    assert published.status_code == 200
+
+    resp = api_client.post(
+        "/api/products/evaluate-uw",
+        headers=headers,
+        json={
+            "plan_id": plan["id"],
+            "product_code": "AUTO",
+            "annual_premium": 1000,
+            "risk_attributes": {
+                "vehicle_year": 2020,
+                "drivers": 1,
+                "prior_claims": 99,
+                "driver_age": 40,
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["decision"] == "ACCEPT"
+    assert body["plan_id"] == plan["id"]
+
+
 @pytest.mark.zephyr("KAN-T37")
 def test_product_can_create_rate_version(api_client):
     """Product role can draft and publish an effective-dated rate version."""
