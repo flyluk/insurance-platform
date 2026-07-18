@@ -36,6 +36,8 @@ def handle_domain_event(event: dict) -> None:
                 payload["product_code"],
                 payload.get("risk_attributes") or {},
                 float(payload["annual_premium"]),
+                plan_id=payload.get("plan_id")
+                or (payload.get("risk_attributes") or {}).get("product_selection", {}).get("plan_id"),
             )
             case = UnderwritingCase(
                 application_id=payload["application_id"],

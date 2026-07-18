@@ -6,19 +6,17 @@ Multi-product (AUTO / HOME / LIFE) insurance microservices on Python FastAPI, Po
 
 ```
 insurance namespace
-├── PostgreSQL (Bitnami Helm) — nb_db, uw_db, policy_db, claims_db, finance_db, identity_db
+├── PostgreSQL (Bitnami Helm) — nb_db, uw_db, policy_db, claims_db, finance_db, identity_db, product_db
 ├── Kafka (apache/kafka KRaft) — topic insurance.domain.events
 ├── new-business ×2
 ├── underwriting ×2
 ├── policy-admin ×2
 ├── claims ×2
 ├── finance ×2
+├── product-engine ×2   # plans + riders catalog
 ├── gateway ×2          # JWT auth + reverse proxy
-└── web ×2              # React staff UI (LoadBalancer)
-
-monitoring namespace
-├── Prometheus ← ServiceMonitor /metrics
-└── Grafana ← Insurance Platform dashboard
+├── web ×2              # React staff UI (LoadBalancer)
+└── product-portal ×2   # Product Studio UI (LoadBalancer)
 ```
 
 Domain events use a **Postgres outbox → Kafka** pattern:
@@ -37,6 +35,7 @@ docker compose up --build
 | Service | URL |
 |---------|-----|
 | Staff UI | http://localhost:8088 |
+| Product Studio | http://localhost:8089 |
 | Gateway API | http://localhost:8090 |
 | Gateway docs | http://localhost:8090/docs |
 
@@ -48,7 +47,17 @@ docker compose up --build
 | uw@insurance.local | uw123456 | underwriter |
 | claims@insurance.local | claims123 | claims |
 | finance@insurance.local | finance123 | finance |
+| product@insurance.local | product123 | product |
 | admin@insurance.local | admin123 | admin |
+
+### Product engine (plans & riders)
+
+- **Product Studio** (`product-portal`) is a separate login for `product` (and `admin`) to configure **basic plans** and **riders** per line (AUTO / HOME / LIFE).
+- Each plan has a **risk field schema** (drives New Business quote forms), **UW rule thresholds** (decline/refer), and **effective-dated rate versions**.
+- Seeded published plans match historical rating bases (AUTO 800, HOME 1200, LIFE 600) plus sample riders, schemas, and UW rules.
+- Staff **New Business** quotes pick a published basic plan and optional riders; premium = `(effective plan + rider rates) × risk factors`.
+- Underwriting loads thresholds from product-engine (`/api/products/evaluate-uw`) with a local fallback.
+- Existing Postgres installs need a one-time `CREATE DATABASE product_db;` (and secret key `PRODUCT_DATABASE_URL`) before deploying `product-engine`.
 
 ## Cluster install (MicroK8s)
 
@@ -65,11 +74,12 @@ Redeploy after code changes:
 
 ## Happy-path workflow
 
-1. Sign in as **agent** → create party → create quote (AUTO/HOME/LIFE) → rate → submit  
+1. Sign in as **agent** → create party → pick published plan (+ riders) → rate → submit  
 2. Sign in as **underwriter** → decide referrals (auto-accept/decline may already bind)  
-3. **Policies** appear when UW accepts → endorse / renew / cancel  
+3. **Policies** appear when UW accepts → renew / cancel (policy change is **admin** only)  
 4. **Claims** → open FNOL on an active policy → settle (triggers finance disbursement)  
 5. **Finance** → pay premium invoices → view ledger  
+6. Sign in to **Product Studio** as **product** → manage plans/riders → publish for quoting  
 
 ## Observability
 

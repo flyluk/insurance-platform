@@ -29,12 +29,16 @@ def nav(page: Page):
     return page.get_by_role("navigation")
 
 
+@pytest.mark.story("KAN-1")
 def test_login_agent(page: Page, ui_base: str):
+    """Staff UI login succeeds for the demo agent."""
     login_as(page, ui_base, "agent@insurance.local", "agent123")
     expect(nav(page).get_by_role("link", name="New Business")).to_be_visible()
 
 
+@pytest.mark.story("KAN-1")
 def test_login_failure(page: Page, ui_base: str):
+    """Staff UI login shows an error for bad credentials."""
     page.goto(f"{ui_base}/login")
     page.get_by_label("Email").fill("agent@insurance.local")
     page.get_by_label("Password").fill("wrong-password")
@@ -42,7 +46,9 @@ def test_login_failure(page: Page, ui_base: str):
     expect(page.get_by_text("Login failed")).to_be_visible(timeout=10000)
 
 
+@pytest.mark.story("KAN-2")
 def test_create_quote_with_form_fields(page: Page, ui_base: str):
+    """Create, rate, and submit a quote from the New Business UI."""
     login_as(page, ui_base, "agent@insurance.local", "agent123")
     nav(page).get_by_role("link", name="New Business").click()
     expect(page.get_by_role("heading", name="New Business")).to_be_visible()
@@ -57,6 +63,7 @@ def test_create_quote_with_form_fields(page: Page, ui_base: str):
     expect(quote_form.get_by_label("Party")).to_contain_text(f"UI Party {suffix}", timeout=10000)
 
     quote_form.get_by_label("Product").select_option("AUTO")
+    expect(quote_form.get_by_label("Basic plan")).not_to_have_value("", timeout=10000)
     quote_form.get_by_label("Vehicle year").fill("2022")
     quote_form.get_by_label("Drivers").fill("1")
     quote_form.get_by_label("Prior claims").fill("0")
@@ -72,7 +79,9 @@ def test_create_quote_with_form_fields(page: Page, ui_base: str):
     expect(page.get_by_text("Submitted to underwriting")).to_be_visible(timeout=10000)
 
 
+@pytest.mark.story("KAN-3")
 def test_underwriting_case_details(page: Page, ui_base: str, api_client, agent_headers):
+    """Underwriting UI shows case details for a submitted application."""
     application = create_submitted_auto_application(api_client, agent_headers)
 
     def underwriting_case():
@@ -93,7 +102,9 @@ def test_underwriting_case_details(page: Page, ui_base: str, api_client, agent_h
     expect(page.get_by_text("Risk attributes")).to_be_visible()
 
 
+@pytest.mark.story("KAN-3")
 def test_policy_list_and_detail(page: Page, ui_base: str, api_client, agent_headers):
+    """Policy Admin UI lists policies and opens a detail page."""
     application = create_submitted_auto_application(api_client, agent_headers)
 
     def bound_application():

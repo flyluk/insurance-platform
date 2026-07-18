@@ -1,10 +1,11 @@
 import pytest
 from helpers import create_auto_quote, unique_email
 
-pytestmark = pytest.mark.api
+pytestmark = [pytest.mark.api, pytest.mark.story("KAN-2")]
 
 
 def test_create_and_list_parties(api_client, agent_headers):
+    """Create a party and see it in the parties list."""
     email = unique_email("party")
     create = api_client.post(
         "/api/nb/parties",
@@ -23,6 +24,7 @@ def test_create_and_list_parties(api_client, agent_headers):
 
 
 def test_create_rate_quote(api_client, agent_headers):
+    """Create an AUTO quote and rate it to a positive premium."""
     _, quote = create_auto_quote(api_client, agent_headers)
     assert quote["status"] == "DRAFT"
     assert quote["product_code"] == "AUTO"
@@ -36,6 +38,7 @@ def test_create_rate_quote(api_client, agent_headers):
 
 
 def test_list_applications(api_client, agent_headers):
+    """List new-business applications."""
     resp = api_client.get("/api/nb/applications", headers=agent_headers)
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)

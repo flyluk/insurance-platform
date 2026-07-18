@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 ProductCode = Literal["AUTO", "HOME", "LIFE"]
 
@@ -12,6 +12,8 @@ class PartyCreate(BaseModel):
     phone: str | None = None
     date_of_birth: str | None = None
     address: str | None = None
+    id_number: str | None = None
+    gender: str | None = None
 
 
 class PartyOut(PartyCreate):
@@ -24,6 +26,8 @@ class PartyOut(PartyCreate):
 class QuoteCreate(BaseModel):
     party_id: str
     product_code: ProductCode
+    plan_id: str
+    rider_ids: list[str] = Field(default_factory=list)
     risk_attributes: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -31,6 +35,8 @@ class QuoteOut(BaseModel):
     id: str
     party_id: str
     product_code: str
+    plan_id: str | None = None
+    rider_ids: list[str] = Field(default_factory=list)
     status: str
     risk_attributes: dict[str, Any]
     annual_premium: float | None
@@ -39,6 +45,11 @@ class QuoteOut(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("rider_ids", mode="before")
+    @classmethod
+    def _rider_ids(cls, value: Any) -> list:
+        return value or []
 
 
 class ApplicationOut(BaseModel):

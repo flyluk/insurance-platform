@@ -24,6 +24,7 @@ SEED_USERS = [
     ("uw@insurance.local", "uw123456", "Demo Underwriter", "underwriter"),
     ("claims@insurance.local", "claims123", "Demo Claims", "claims"),
     ("finance@insurance.local", "finance123", "Demo Finance", "finance"),
+    ("product@insurance.local", "product123", "Product Manager", "product"),
 ]
 
 ROUTE_MAP = [
@@ -32,6 +33,7 @@ ROUTE_MAP = [
     ("/api/policies", "policy_admin_url"),
     ("/api/claims", "claims_url"),
     ("/api/finance", "finance_url"),
+    ("/api/products", "product_engine_url"),
 ]
 
 

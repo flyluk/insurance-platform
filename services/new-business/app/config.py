@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
 
     underwriting_events_url: str = "http://underwriting:8000/events"
+    product_engine_url: str = "http://product-engine:8000"
 
     db_pool_size: int = 5
     db_max_overflow: int = 8

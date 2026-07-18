@@ -1,0 +1,77 @@
+name: Zephyr Scale tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "tests/**"
+      - "scripts/zephyr_*.py"
+      - "pytest.ini"
+      - ".github/workflows/zephyr-tests.yml"
+  pull_request:
+    paths:
+      - "tests/**"
+      - "scripts/zephyr_*.py"
+      - "pytest.ini"
+      - ".github/workflows/zephyr-tests.yml"
+
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      API_BASE_URL: ${{ secrets.API_BASE_URL }}
+      UI_BASE_URL: ${{ secrets.UI_BASE_URL }}
+      ZEPHYR_SCALE_TOKEN: ${{ secrets.ZEPHYR_SCALE_TOKEN }}
+      ZEPHYR_PROJECT_KEY: ${{ secrets.ZEPHYR_PROJECT_KEY }}
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tests/requirements.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tests/requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Require target URLs
+        run: |
+          if [ -z "$API_BASE_URL" ] || [ -z "$UI_BASE_URL" ]; then
+            echo "Set repository secrets API_BASE_URL and UI_BASE_URL to a reachable stack."
+            exit 1
+          fi
+
+      - name: Sync Zephyr Scale cases from pytest
+        if: ${{ env.ZEPHYR_SCALE_TOKEN != '' && env.ZEPHYR_PROJECT_KEY != '' }}
+        run: python scripts/zephyr_sync.py
+
+      - name: Run pytest (API, E2E, UI)
+        run: |
+          mkdir -p reports
+          pytest tests/ -v --browser chromium --junitxml=reports/junit.xml
+
+      - name: Publish results to Zephyr Scale
+        if: ${{ always() && env.ZEPHYR_SCALE_TOKEN != '' && env.ZEPHYR_PROJECT_KEY != '' }}
+        run: |
+          python scripts/zephyr_publish.py \
+            --junit reports/junit.xml \
+            --cycle-name "CI ${{ github.sha }} (${{ github.ref_name }})" \
+            --auto-create-cases
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-report
+          path: reports/junit.xml
+          if-no-files-found: warn

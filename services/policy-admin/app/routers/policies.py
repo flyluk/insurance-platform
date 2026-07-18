@@ -15,6 +15,7 @@ from insurance_shared.metrics import record_event
 router = APIRouter(tags=["policy-admin"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
 agent_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "agent", "admin")
+admin_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "admin")
 
 
 def _policy_number(product_code: str) -> str:
@@ -72,7 +73,7 @@ def get_policy(policy_id: str, db: Session = Depends(get_db), _=Depends(auth)):
 
 
 @router.post("/api/policies/{policy_id}/endorse", response_model=PolicyOut)
-def endorse(policy_id: str, body: EndorsementCreate, db: Session = Depends(get_db), _=Depends(agent_auth)):
+def endorse(policy_id: str, body: EndorsementCreate, db: Session = Depends(get_db), _=Depends(admin_auth)):
     policy = db.get(Policy, policy_id)
     if not policy or policy.status != "ACTIVE":
         raise HTTPException(400, "Active policy required")

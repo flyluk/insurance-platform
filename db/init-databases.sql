@@ -5,3 +5,4 @@ CREATE DATABASE policy_db;
 CREATE DATABASE claims_db;
 CREATE DATABASE finance_db;
 CREATE DATABASE identity_db;
+CREATE DATABASE product_db;

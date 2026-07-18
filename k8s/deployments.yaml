@@ -54,6 +54,11 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: KAFKA_HANDLER_MAX_RETRIES
+            - name: PRODUCT_ENGINE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: PRODUCT_ENGINE_URL
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -150,6 +155,11 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: KAFKA_HANDLER_MAX_RETRIES
+            - name: PRODUCT_ENGINE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: PRODUCT_ENGINE_URL
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -539,6 +549,11 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: FINANCE_URL
+            - name: PRODUCT_ENGINE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: PRODUCT_ENGINE_URL
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -623,6 +638,130 @@ spec:
   type: LoadBalancer
   selector:
     app: web
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-engine
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: product-engine
+  template:
+    metadata:
+      labels:
+        app: product-engine
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api
+          image: insurance-product-engine:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: PRODUCT_DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: insurance-secrets
+                  key: JWT_SECRET
+            - name: UVICORN_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: UVICORN_WORKERS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-engine
+  namespace: insurance
+  labels:
+    app: product-engine
+spec:
+  selector:
+    app: product-engine
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-portal
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: product-portal
+  template:
+    metadata:
+      labels:
+        app: product-portal
+    spec:
+      containers:
+        - name: web
+          image: insurance-product-portal:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "250m"
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-portal
+  namespace: insurance
+spec:
+  type: LoadBalancer
+  selector:
+    app: product-portal
   ports:
     - port: 80
       targetPort: 80

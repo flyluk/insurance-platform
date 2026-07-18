@@ -12,3 +12,6 @@ frontend/dist/
 .DS_Store
 scripts/.insurance-postgres-init.generated.yaml
 scripts/.shop-demo-postgres-init.generated.yaml
+reports/*.xml
+reports/*.html
+!reports/.gitkeep

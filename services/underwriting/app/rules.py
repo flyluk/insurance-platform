@@ -1,10 +1,15 @@
-"""Declarative underwriting rules for AUTO / HOME / LIFE."""
+"""Underwriting rules — prefer product-engine thresholds, fallback to local defaults."""
+
+from __future__ import annotations
 
 from typing import Any
 
+import httpx
 
-def evaluate(product_code: str, risk: dict[str, Any], annual_premium: float) -> tuple[str, str]:
-    """Return (decision, reason) where decision in ACCEPT|REFER|DECLINE."""
+from app.config import settings
+
+
+def _local_fallback(product_code: str, risk: dict[str, Any], annual_premium: float) -> tuple[str, str]:
     if product_code == "AUTO":
         prior = int(risk.get("prior_claims") or 0)
         age = int(risk.get("driver_age") or risk.get("insured_age") or 35)
@@ -35,3 +40,31 @@ def evaluate(product_code: str, risk: dict[str, Any], annual_premium: float) -> 
         return "ACCEPT", "Life rules passed"
 
     return "REFER", "Unknown product — manual review"
+
+
+def evaluate(
+    product_code: str,
+    risk: dict[str, Any],
+    annual_premium: float,
+    *,
+    plan_id: str | None = None,
+) -> tuple[str, str]:
+    """Return (decision, reason) where decision in ACCEPT|REFER|DECLINE."""
+    url = f"{settings.product_engine_url.rstrip('/')}/api/products/evaluate-uw"
+    try:
+        resp = httpx.post(
+            url,
+            json={
+                "plan_id": plan_id,
+                "product_code": product_code,
+                "risk_attributes": risk,
+                "annual_premium": annual_premium,
+            },
+            timeout=10.0,
+        )
+        if resp.status_code < 400:
+            body = resp.json()
+            return body["decision"], body["reason"]
+    except httpx.HTTPError:
+        pass
+    return _local_fallback(product_code, risk, annual_premium)

@@ -14,10 +14,26 @@ from insurance_shared.metrics import PrometheusMiddleware, metrics_response
 from insurance_shared.runtime import event_runtime
 
 
+def _ensure_party_columns() -> None:
+    """Add new party columns on existing DBs (create_all does not alter tables)."""
+    from sqlalchemy import text
+
+    statements = [
+        "ALTER TABLE parties ADD COLUMN IF NOT EXISTS id_number VARCHAR(64)",
+        "ALTER TABLE parties ADD COLUMN IF NOT EXISTS gender VARCHAR(32)",
+        "ALTER TABLE quotes ADD COLUMN IF NOT EXISTS plan_id VARCHAR(36)",
+        "ALTER TABLE quotes ADD COLUMN IF NOT EXISTS rider_ids JSONB DEFAULT '[]'::jsonb",
+    ]
+    with engine.begin() as conn:
+        for stmt in statements:
+            conn.execute(text(stmt))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     OutboxBase.metadata.create_all(bind=engine)
+    _ensure_party_columns()
     async with event_runtime(
         SessionLocal,
         poll_seconds=settings.outbox_poll_seconds,
