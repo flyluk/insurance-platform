@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -17,6 +17,35 @@ def _active_versions(q, as_of: date):
         .filter((RateVersion.effective_to.is_(None)) | (RateVersion.effective_to >= as_of))
         .order_by(RateVersion.effective_from.desc())
     )
+
+
+def retire_overlapping_published_rates(db: Session, new_ver: RateVersion) -> None:
+    """End-date or supersede prior PUBLISHED rates that overlap the newly published version."""
+    q = db.query(RateVersion).filter(
+        RateVersion.id != new_ver.id,
+        RateVersion.status == "PUBLISHED",
+    )
+    if new_ver.plan_id:
+        q = q.filter(RateVersion.plan_id == new_ver.plan_id)
+    elif new_ver.rider_id:
+        q = q.filter(RateVersion.rider_id == new_ver.rider_id)
+    else:
+        return
+
+    start = new_ver.effective_from
+    new_end = new_ver.effective_to
+    for old in q.all():
+        old_end = old.effective_to
+        overlaps = (old_end is None or old_end >= start) and (
+            new_end is None or new_end >= old.effective_from
+        )
+        if not overlaps:
+            continue
+        if old.effective_from < start:
+            old.effective_to = start - timedelta(days=1)
+        else:
+            # Same or later start date — retire so only one published rate applies.
+            old.status = "SUPERSEDED"
 
 
 def resolve_plan_amount(db: Session, plan: Plan, as_of: date | None = None) -> tuple[float, RateVersion | None]:

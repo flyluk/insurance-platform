@@ -24,7 +24,14 @@ def _ensure_columns() -> None:
             conn.execute(text(stmt))
 
 
+# Stable advisory lock key for rate/metadata backfill (product-engine replicas).
+_BACKFILL_LOCK_KEY = 874_201_338
+
+
 def _backfill_plan_metadata(db) -> None:
+    """Fill missing plan metadata and published rates once; serialize across replicas."""
+    # pg_advisory_xact_lock holds until commit/rollback of this transaction.
+    db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _BACKFILL_LOCK_KEY})
     today = date.today()
     for plan in db.query(Plan).all():
         changed = False

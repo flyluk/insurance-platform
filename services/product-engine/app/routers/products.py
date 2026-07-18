@@ -9,7 +9,12 @@ from app.config import settings
 from app.database import get_db
 from app.defaults import RISK_SCHEMAS, UW_RULES
 from app.models import Plan, PlanRider, RateVersion, Rider
-from app.pricing import evaluate_uw_rules, resolve_plan_amount, resolve_rider_amount
+from app.pricing import (
+    evaluate_uw_rules,
+    resolve_plan_amount,
+    resolve_rider_amount,
+    retire_overlapping_published_rates,
+)
 from app.schemas import (
     EvaluateUwIn,
     EvaluateUwOut,
@@ -72,7 +77,13 @@ def _rider_out(db: Session, rider: Rider, as_of: date | None = None) -> RiderOut
     return data
 
 
-def _plan_out(db: Session, plan: Plan, as_of: date | None = None) -> PlanOut:
+def _plan_out(
+    db: Session,
+    plan: Plan,
+    as_of: date | None = None,
+    *,
+    include_uw_rules: bool = True,
+) -> PlanOut:
     riders = [pr.rider for pr in plan.plan_riders if pr.rider is not None]
     riders.sort(key=lambda r: (r.sort_order, r.name))
     amount, _ = resolve_plan_amount(db, plan, as_of)
@@ -86,7 +97,8 @@ def _plan_out(db: Session, plan: Plan, as_of: date | None = None) -> PlanOut:
         status=plan.status,
         sort_order=plan.sort_order,
         risk_schema=plan.risk_schema or [],
-        uw_rules=plan.uw_rules or {"decline": [], "refer": []},
+        # Decline/refer thresholds are staff-only; public catalog omits them.
+        uw_rules=(plan.uw_rules or {"decline": [], "refer": []}) if include_uw_rules else {},
         created_at=plan.created_at,
         updated_at=plan.updated_at,
         riders=[_rider_out(db, r, as_of) for r in riders],
@@ -147,7 +159,8 @@ def list_plans(
             continue
         seen.add(p.id)
         unique.append(p)
-    return [_plan_out(db, p, as_of) for p in unique]
+    include_uw = user is not None
+    return [_plan_out(db, p, as_of, include_uw_rules=include_uw) for p in unique]
 
 
 @router.get("/plans/{plan_id}", response_model=PlanOut)
@@ -160,7 +173,7 @@ def get_plan(
     plan = _load_plan(db, plan_id)
     if plan.status != "PUBLISHED":
         _require_reader(user)
-    return _plan_out(db, plan, as_of)
+    return _plan_out(db, plan, as_of, include_uw_rules=user is not None)
 
 
 @router.post("/plans", response_model=PlanOut)
@@ -437,6 +450,7 @@ def publish_plan_rate(
     if not ver or ver.plan_id != plan_id:
         raise HTTPException(404, "Rate version not found")
     ver.status = "PUBLISHED"
+    retire_overlapping_published_rates(db, ver)
     plan = db.get(Plan, plan_id)
     if plan:
         plan.base_premium = ver.amount
@@ -480,6 +494,7 @@ def publish_rider_rate(
     if not ver or ver.rider_id != rider_id:
         raise HTTPException(404, "Rate version not found")
     ver.status = "PUBLISHED"
+    retire_overlapping_published_rates(db, ver)
     rider = db.get(Rider, rider_id)
     if rider:
         rider.premium = ver.amount
@@ -529,15 +544,16 @@ def resolve_quote(body: QuoteResolveIn, db: Session = Depends(get_db), _=Depends
 def evaluate_uw(body: EvaluateUwIn, db: Session = Depends(get_db), _=Depends(reader_auth)):
     """Staff/service UW evaluation — requires JWT.
 
-    Use the given published plan_id when valid and product_code matches (when
-    provided). Do not apply another line's plan rules on a mismatched pair.
-    When plan_id is missing/invalid, evaluate using product-line default rules so
-    callers still get HTTP 200 (avoid forcing underwriting local fallback).
+    Use the given plan_id when it exists and product_code matches (when provided),
+    even if the plan was unpublished after quote submit — in-flight UW must keep
+    the plan's stored rules. Do not apply another line's plan rules on a mismatched
+    pair. When plan_id is missing/invalid, evaluate using product-line default rules
+    so callers still get HTTP 200 (avoid forcing underwriting local fallback).
     """
     plan: Plan | None = None
     if body.plan_id:
         candidate = db.get(Plan, body.plan_id)
-        if candidate is not None and candidate.status == "PUBLISHED":
+        if candidate is not None:
             req_code = (body.product_code or "").upper()
             if req_code and candidate.product_code.upper() != req_code:
                 plan = None

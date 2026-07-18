@@ -463,3 +463,120 @@ def test_product_can_create_rate_version(api_client):
     )
     assert published.status_code == 200
     assert published.json()["status"] == "PUBLISHED"
+
+
+def test_published_catalog_hides_uw_rules_without_auth(api_client, agent_headers):
+    """Unauthenticated published plan list must not expose decline/refer thresholds."""
+    public = api_client.get(
+        "/api/products/plans",
+        params={"product_code": "AUTO", "status": "PUBLISHED"},
+    )
+    assert public.status_code == 200
+    assert public.json()
+    for plan in public.json():
+        assert plan.get("uw_rules") in ({}, None) or plan["uw_rules"] == {}
+
+    authed = api_client.get(
+        "/api/products/plans",
+        headers=agent_headers,
+        params={"product_code": "AUTO", "status": "PUBLISHED"},
+    )
+    assert authed.status_code == 200
+    seeded = next(p for p in authed.json() if p["code"] == "AUTO-BASIC")
+    assert seeded["uw_rules"].get("decline") or seeded["uw_rules"].get("refer")
+
+
+def test_evaluate_uw_uses_unpublished_plan_rules(api_client):
+    """In-flight UW must keep plan uw_rules after the plan is unpublished."""
+    headers = _auth_headers(api_client, "product")
+    code = f"T-{unique_email('uwun')[:8].upper()}"
+    create = api_client.post(
+        "/api/products/plans",
+        headers=headers,
+        json={
+            "product_code": "AUTO",
+            "code": code,
+            "name": "Later Unpublished Auto-bind",
+            "base_premium": 900,
+            "uw_rules": {"decline": [], "refer": []},
+        },
+    )
+    assert create.status_code == 200
+    plan = create.json()
+    assert api_client.post(f"/api/products/plans/{plan['id']}/publish", headers=headers).status_code == 200
+    assert api_client.post(f"/api/products/plans/{plan['id']}/unpublish", headers=headers).status_code == 200
+
+    # Line defaults would DECLINE prior_claims=99; empty plan rules ACCEPT.
+    resp = api_client.post(
+        "/api/products/evaluate-uw",
+        headers=headers,
+        json={
+            "plan_id": plan["id"],
+            "product_code": "AUTO",
+            "annual_premium": 1000,
+            "risk_attributes": {
+                "vehicle_year": 2020,
+                "drivers": 1,
+                "prior_claims": 99,
+                "driver_age": 40,
+            },
+        },
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["decision"] == "ACCEPT"
+    assert out["plan_id"] == plan["id"]
+
+
+def test_publishing_rate_end_dates_prior_published_version(api_client):
+    """Publishing a new rate must retire overlapping prior published versions."""
+    headers = _auth_headers(api_client, "product")
+    code = f"T-{unique_email('rate2')[:8].upper()}"
+    create = api_client.post(
+        "/api/products/plans",
+        headers=headers,
+        json={
+            "product_code": "LIFE",
+            "code": code,
+            "name": "Rate Overlap Plan",
+            "base_premium": 600,
+        },
+    )
+    assert create.status_code == 200
+    plan = create.json()
+    assert api_client.post(f"/api/products/plans/{plan['id']}/publish", headers=headers).status_code == 200
+
+    rates_before = api_client.get(f"/api/products/plans/{plan['id']}/rates", headers=headers).json()
+    prior = next(r for r in rates_before if r["status"] == "PUBLISHED")
+    assert prior["effective_to"] is None
+
+    newer = api_client.post(
+        f"/api/products/plans/{plan['id']}/rates",
+        headers=headers,
+        json={
+            "version_code": f"T-{unique_email('rv')[:8].upper()}",
+            "amount": 777,
+            "effective_from": "2026-08-01",
+            "effective_to": None,
+        },
+    )
+    assert newer.status_code == 200
+    newer_id = newer.json()["id"]
+    published = api_client.post(
+        f"/api/products/plans/{plan['id']}/rates/{newer_id}/publish",
+        headers=headers,
+    )
+    assert published.status_code == 200
+
+    rates_after = api_client.get(f"/api/products/plans/{plan['id']}/rates", headers=headers).json()
+    prior_after = next(r for r in rates_after if r["id"] == prior["id"])
+    assert prior_after["status"] == "PUBLISHED"
+    assert prior_after["effective_to"] == "2026-07-31"
+
+    resolve = api_client.post(
+        "/api/products/resolve-quote",
+        headers=headers,
+        json={"plan_id": plan["id"], "rider_ids": [], "as_of": "2026-08-15"},
+    )
+    assert resolve.status_code == 200
+    assert resolve.json()["plan_amount"] == 777
