@@ -77,6 +77,16 @@ Redeploy after code changes:
 - [`k8s/servicemonitor.yaml`](k8s/servicemonitor.yaml) scrapes metrics in-cluster
 - Grafana dashboard ConfigMap: [`k8s/grafana-dashboard.yaml`](k8s/grafana-dashboard.yaml) (label `grafana_dashboard=1` for sidecar)
 
+## Test automation
+
+API, E2E (Kafka), and Playwright UI suite under [`tests/`](tests/). See [`tests/README.md`](tests/README.md).
+
+```bash
+pip install -r tests/requirements.txt
+playwright install chromium
+pytest tests/ -v
+```
+
 ## Layout
 
 ```
