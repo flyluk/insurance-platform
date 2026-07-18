@@ -108,6 +108,11 @@ export default function Quotes() {
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    // Clear previous line immediately so UI cannot show stale plans/risk under the new product.
+    setPlans([]);
+    setPlanId("");
+    setSelectedRiders([]);
+    setRisk({});
     api
       .get("/products/plans", {
         params: { product_code: product, status: "PUBLISHED" },

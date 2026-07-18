@@ -38,6 +38,9 @@ def resolve_rider_amount(db: Session, rider: Rider, as_of: date | None = None) -
 
 
 def _cmp(left: Any, op: str, right: Any) -> bool:
+    # Missing risk fields never satisfy a condition (do not raise on None >= n).
+    if left is None:
+        return False
     try:
         if isinstance(right, bool) or isinstance(left, bool):
             left_b = bool(left) if not isinstance(left, bool) else left
@@ -52,20 +55,23 @@ def _cmp(left: Any, op: str, right: Any) -> bool:
                 left = float(left)
                 right = float(right)
     except (TypeError, ValueError):
-        pass
+        return False
 
-    if op == "eq":
-        return left == right
-    if op == "ne":
-        return left != right
-    if op == "gt":
-        return left > right
-    if op == "gte":
-        return left >= right
-    if op == "lt":
-        return left < right
-    if op == "lte":
-        return left <= right
+    try:
+        if op == "eq":
+            return left == right
+        if op == "ne":
+            return left != right
+        if op == "gt":
+            return left > right
+        if op == "gte":
+            return left >= right
+        if op == "lt":
+            return left < right
+        if op == "lte":
+            return left <= right
+    except TypeError:
+        return False
     return False
 
 

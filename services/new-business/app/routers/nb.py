@@ -129,6 +129,26 @@ def submit_application(quote_id: str, db: Session = Depends(get_db), _=Depends(a
     if existing:
         raise HTTPException(400, "Application already exists for quote")
 
+    if not quote.plan_id:
+        raise HTTPException(400, "Quote has no plan; re-create and rate before submit")
+    try:
+        selection = validate_quote_selection(
+            product_code=quote.product_code,
+            plan_id=quote.plan_id,
+            rider_ids=list(quote.rider_ids or []),
+        )
+    except ProductCatalogError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    pricing = selection["pricing"]
+    expected = rate_quote(
+        quote.product_code,
+        quote.risk_attributes or {},
+        base_premium=float(pricing["plan_amount"]),
+        rider_premiums=[float(r["amount"]) for r in pricing["riders"]],
+    )
+    if abs(float(expected) - float(quote.annual_premium)) > 0.01:
+        raise HTTPException(400, "Quote premium is out of date; re-rate before submit")
+
     app = Application(
         quote_id=quote.id,
         party_id=quote.party_id,

@@ -55,7 +55,7 @@ def validate_quote_selection(
     pricing = resolve_quote_pricing(plan_id, rider_ids)
     allowed = {r["id"]: r for r in plan.get("riders") or []}
     selected_riders: list[dict[str, Any]] = []
-    for rid in rider_ids:
+    for rid in dict.fromkeys(rider_ids):
         rider = allowed.get(rid)
         if not rider:
             raise ProductCatalogError("Rider is not allowed on this plan")

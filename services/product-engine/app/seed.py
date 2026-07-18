@@ -1,5 +1,7 @@
 from datetime import date
 
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.defaults import RISK_SCHEMAS, UW_RULES
@@ -72,47 +74,57 @@ SEED = [
     },
 ]
 
+# Stable advisory lock key for catalog seed (product-engine replicas).
+_SEED_LOCK_KEY = 874_201_337
+
 
 def seed_catalog(db: Session) -> None:
+    """Seed default plans/riders once. Serialized across replicas via advisory lock."""
+    # pg_advisory_xact_lock holds until commit/rollback of this transaction.
+    db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _SEED_LOCK_KEY})
     if db.query(Plan).count() > 0:
         return
     today = date.today()
-    for line in SEED:
-        code = line["product_code"]
-        plan = Plan(
-            product_code=code,
-            status="PUBLISHED",
-            risk_schema=RISK_SCHEMAS.get(code, []),
-            uw_rules=UW_RULES.get(code, {"decline": [], "refer": []}),
-            **line["plan"],
-        )
-        db.add(plan)
-        db.flush()
-        db.add(
-            RateVersion(
-                plan_id=plan.id,
-                version_code="v1",
-                amount=plan.base_premium,
-                effective_from=today,
-                status="PUBLISHED",
-            )
-        )
-        for rider_data in line["riders"]:
-            rider = Rider(
+    try:
+        for line in SEED:
+            code = line["product_code"]
+            plan = Plan(
                 product_code=code,
                 status="PUBLISHED",
-                **rider_data,
+                risk_schema=RISK_SCHEMAS.get(code, []),
+                uw_rules=UW_RULES.get(code, {"decline": [], "refer": []}),
+                **line["plan"],
             )
-            db.add(rider)
+            db.add(plan)
             db.flush()
-            db.add(PlanRider(plan_id=plan.id, rider_id=rider.id))
             db.add(
                 RateVersion(
-                    rider_id=rider.id,
+                    plan_id=plan.id,
                     version_code="v1",
-                    amount=rider.premium,
+                    amount=plan.base_premium,
                     effective_from=today,
                     status="PUBLISHED",
                 )
             )
-    db.commit()
+            for rider_data in line["riders"]:
+                rider = Rider(
+                    product_code=code,
+                    status="PUBLISHED",
+                    **rider_data,
+                )
+                db.add(rider)
+                db.flush()
+                db.add(PlanRider(plan_id=plan.id, rider_id=rider.id))
+                db.add(
+                    RateVersion(
+                        rider_id=rider.id,
+                        version_code="v1",
+                        amount=rider.premium,
+                        effective_from=today,
+                        status="PUBLISHED",
+                    )
+                )
+        db.commit()
+    except IntegrityError:
+        # Another replica won the race after the count check.
+        db.rollback()

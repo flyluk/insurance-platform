@@ -486,7 +486,8 @@ def resolve_quote(body: QuoteResolveIn, db: Session = Depends(get_db)):
     allowed = {pr.rider_id: pr.rider for pr in plan.plan_riders if pr.rider}
     rider_rows = []
     total = plan_amount
-    for rid in body.rider_ids:
+    # Deduplicate while preserving order so duplicate ids cannot inflate total_base.
+    for rid in dict.fromkeys(body.rider_ids):
         rider = allowed.get(rid)
         if not rider:
             raise HTTPException(400, "Rider is not allowed on this plan")
@@ -515,25 +516,17 @@ def resolve_quote(body: QuoteResolveIn, db: Session = Depends(get_db)):
 def evaluate_uw(body: EvaluateUwIn, db: Session = Depends(get_db)):
     """Public for underwriting service-to-service decisions.
 
-    Prefer the given plan_id when it exists and is published; otherwise fall back
-    to a published plan for product_code so callers still get DB-backed rules
-    instead of HTTP errors that force local UW fallbacks.
+    Use the given published plan_id when valid. Do not silently substitute another
+    published plan for the line — that would apply the wrong stored uw_rules.
+    When plan_id is missing/invalid, evaluate using product-line default rules so
+    callers still get HTTP 200 (avoid forcing underwriting local fallback).
     """
     plan: Plan | None = None
     if body.plan_id:
-        plan = db.get(Plan, body.plan_id)
-        if plan is not None and plan.status != "PUBLISHED":
-            plan = None
-    if plan is None and body.product_code:
-        plan = (
-            db.query(Plan)
-            .filter(Plan.product_code == body.product_code.upper(), Plan.status == "PUBLISHED")
-            .order_by(Plan.sort_order, Plan.name)
-            .first()
-        )
+        candidate = db.get(Plan, body.plan_id)
+        if candidate is not None and candidate.status == "PUBLISHED":
+            plan = candidate
 
-    # Respect stored plan rules, including intentional empty {"decline":[],"refer":[]}
-    # (auto-bind all). Only fall back to product UW_RULES when no plan is resolved.
     if plan is not None:
         rules = plan.uw_rules if plan.uw_rules is not None else {"decline": [], "refer": []}
     else:

@@ -63,8 +63,15 @@ def evaluate(
             timeout=10.0,
         )
         if resp.status_code < 400:
-            body = resp.json()
-            return body["decision"], body["reason"]
+            try:
+                body = resp.json()
+            except ValueError:
+                body = None
+            if isinstance(body, dict):
+                decision = body.get("decision")
+                reason = body.get("reason")
+                if isinstance(decision, str) and isinstance(reason, str):
+                    return decision, reason
     except httpx.HTTPError:
         pass
     return _local_fallback(product_code, risk, annual_premium)

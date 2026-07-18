@@ -28,7 +28,9 @@ def _backfill_plan_metadata(db) -> None:
     today = date.today()
     for plan in db.query(Plan).all():
         changed = False
-        if not plan.risk_schema:
+        # Only backfill when risk_schema is NULL. An empty list is a valid
+        # Product Studio configuration and must not be overwritten on restart.
+        if plan.risk_schema is None:
             plan.risk_schema = RISK_SCHEMAS.get(plan.product_code, [])
             changed = True
         # Only backfill when uw_rules is missing entirely. Empty
@@ -55,6 +57,8 @@ def _backfill_plan_metadata(db) -> None:
                 )
             )
     for rider in db.query(Rider).all():
+        if rider.status != "PUBLISHED":
+            continue
         has_rate = (
             db.query(RateVersion)
             .filter(RateVersion.rider_id == rider.id, RateVersion.status == "PUBLISHED")
