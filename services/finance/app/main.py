@@ -7,7 +7,7 @@ from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.event_handlers import HANDLED_TYPES, handle_domain_event
 from app.models import ClaimDisbursement, Invoice, JournalEntry, JournalLine, Payment  # noqa: F401
-from app.routers import events, finance
+from app.routers import finance
 from insurance_shared.events import OutboxBase
 from insurance_shared.metrics import PrometheusMiddleware, metrics_response
 from insurance_shared.runtime import event_runtime

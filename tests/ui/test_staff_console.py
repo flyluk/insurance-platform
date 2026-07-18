@@ -1,9 +1,19 @@
 import re
 
 import pytest
+from helpers import create_auto_quote, wait_until
 from playwright.sync_api import Page, expect
 
 pytestmark = pytest.mark.ui
+
+
+def create_submitted_auto_application(api_client, agent_headers):
+    _, quote = create_auto_quote(api_client, agent_headers)
+    rated = api_client.post(f"/api/nb/quotes/{quote['id']}/rate", headers=agent_headers)
+    rated.raise_for_status()
+    submitted = api_client.post(f"/api/nb/quotes/{quote['id']}/submit", headers=agent_headers)
+    submitted.raise_for_status()
+    return submitted.json()
 
 
 def login_as(page: Page, ui_base: str, email: str, password: str) -> None:
@@ -62,6 +72,16 @@ def test_create_quote_with_form_fields(page: Page, ui_base: str):
     expect(page.get_by_text("Submitted to underwriting")).to_be_visible(timeout=10000)
 
 
+def test_underwriting_case_details(page: Page, ui_base: str, api_client, agent_headers):
+    application = create_submitted_auto_application(api_client, agent_headers)
+
+    def underwriting_case():
+        cases = api_client.get("/api/uw/cases", headers=agent_headers)
+        cases.raise_for_status()
+        return next((case for case in cases.json() if case["application_id"] == application["id"]), None)
+
+    wait_until(underwriting_case, timeout=45, desc=f"underwriting case for application {application['id']}")
+
 def test_underwriting_case_details(page: Page, ui_base: str):
     login_as(page, ui_base, "uw@insurance.local", "uw123456")
     nav(page).get_by_role("link", name="Underwriting").click()
@@ -73,6 +93,19 @@ def test_underwriting_case_details(page: Page, ui_base: str):
     expect(page.get_by_role("heading", name="Case details")).to_be_visible()
     expect(page.get_by_text("Risk attributes")).to_be_visible()
 
+
+def test_policy_list_and_detail(page: Page, ui_base: str, api_client, agent_headers):
+    application = create_submitted_auto_application(api_client, agent_headers)
+
+    def bound_application():
+        applications = api_client.get("/api/nb/applications", headers=agent_headers)
+        applications.raise_for_status()
+        match = next((app for app in applications.json() if app["id"] == application["id"]), None)
+        if match and match.get("status") == "BOUND" and match.get("policy_id"):
+            return match
+        return None
+
+    wait_until(bound_application, timeout=45, desc=f"application {application['id']} BOUND")
 
 def test_policy_list_and_detail(page: Page, ui_base: str):
     login_as(page, ui_base, "agent@insurance.local", "agent123")

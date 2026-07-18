@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api/client";
 
@@ -43,8 +43,15 @@ export default function PolicyDetail() {
   const [endorseType, setEndorseType] = useState("COVERAGE_UPDATE");
   const [endorseDesc, setEndorseDesc] = useState("Increase coverage");
   const [premiumDelta, setPremiumDelta] = useState(50);
+  const activeId = useRef(id);
+  activeId.current = id;
 
   async function refresh(isCurrent: () => boolean = () => true) {
+    if (!id || activeId.current !== id) return;
+    const requestedId = id;
+    const [p, e] = await Promise.all([
+      api.get(`/policies/${requestedId}`),
+      api.get(`/policies/${requestedId}/endorsements`).catch((endorsementsError) => {
     if (!id) return;
     const [p, e] = await Promise.all([
       api.get(`/policies/${id}`),
@@ -53,6 +60,9 @@ export default function PolicyDetail() {
         return null;
       }),
     ]);
+    if (!isCurrent() || activeId.current !== requestedId) return;
+    setPolicy(p.data);
+    setEndorsements(e?.data ?? []);
     if (!isCurrent()) return;
     setPolicy(p.data);
     if (e) setEndorsements(e.data);

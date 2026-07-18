@@ -43,10 +43,13 @@ def handle_domain_event(event: dict) -> None:
             app_id = payload.get("application_id")
             if app_id:
                 app = db.get(Application, app_id)
-                if app:
-                    app.status = "BOUND"
-                    app.policy_id = payload.get("policy_id")
-                    record_event("PolicyBound", "consumed", settings.service_name)
+                if not app:
+                    # Same as UnderwritingDecided: do not mark processed / commit offset
+                    # until the application row exists so the bind can be applied.
+                    raise LookupError(f"Application not found for PolicyBound: {app_id}")
+                app.status = "BOUND"
+                app.policy_id = payload.get("policy_id")
+                record_event("PolicyBound", "consumed", settings.service_name)
 
         mark_processed(db, event_id, event_type)
         db.commit()
