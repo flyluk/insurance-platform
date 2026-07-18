@@ -140,6 +140,45 @@ async def kafka_event_consumer(
         # Attempts keyed by (partition, offset) so seek/retry does not reset the budget incorrectly
         # when the same message is re-fetched.
         attempts: dict[tuple[int, int], int] = {}
+        # After handler retries are exhausted, only retry DLQ — do not re-run decode/handler
+        # (avoids exceeding max retries, duplicate side effects, or committing without DLQ).
+        dlq_pending: dict[tuple[int, int], tuple[Any, BaseException, int]] = {}
+
+        async def _commit_offset() -> None:
+            await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
+            attempts.pop(attempt_key, None)
+            dlq_pending.pop(attempt_key, None)
+
+        async def _retry_dlq_only(event_payload: Any, error: BaseException, n: int) -> bool:
+            """Publish to DLQ and commit. Returns True if the message is done."""
+            event_id = event_payload.get("event_id") if isinstance(event_payload, dict) else None
+            try:
+                await _publish_dlq(
+                    producer,
+                    group_id=group_id,
+                    event=event_payload,
+                    topic=msg.topic,
+                    partition=msg.partition,
+                    offset=msg.offset,
+                    attempts=n,
+                    error=error,
+                )
+            except Exception:
+                # Do not commit: losing both processing and DLQ is silent data loss.
+                dlq_pending[attempt_key] = (event_payload, error, n)
+                logger.exception(
+                    "DLQ publish failed group=%s event_id=%s offset=%s; "
+                    "not committing; will retry DLQ only",
+                    group_id,
+                    event_id,
+                    msg.offset,
+                )
+                await asyncio.sleep(_RETRY_SLEEP_SECONDS)
+                consumer.seek(tp, msg.offset)
+                return False
+            await _commit_offset()
+            return True
+
         # Use getmany (not async-for) so a failed handler can seek back to the same
         # offset. Committing a later message must never skip an unprocessed one.
         while True:
@@ -150,18 +189,22 @@ async def kafka_event_consumer(
             for tp, messages in batches.items():
                 for msg in messages:
                     attempt_key = (msg.partition, msg.offset)
+                    pending = dlq_pending.get(attempt_key)
+                    if pending is not None:
+                        event_payload, pending_error, pending_attempts = pending
+                        await _retry_dlq_only(event_payload, pending_error, pending_attempts)
+                        continue
+
                     event: Any = None
                     event_type: Any = None
                     try:
                         event = _decode_event(msg.value)
                         event_type = event.get("event_type")
                         if event_type not in handled_types:
-                            await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
-                            attempts.pop(attempt_key, None)
+                            await _commit_offset()
                             continue
                         await asyncio.to_thread(handler, event)
-                        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
-                        attempts.pop(attempt_key, None)
+                        await _commit_offset()
                     except Exception as exc:
                         n = attempts.get(attempt_key, 0) + 1
                         attempts[attempt_key] = n
@@ -181,6 +224,9 @@ async def kafka_event_consumer(
                             consumer.seek(tp, msg.offset)
                             continue
 
+                        event_payload = (
+                            event if event is not None else {"raw": _raw_preview(msg.value)}
+                        )
                         logger.exception(
                             "Event handler exhausted retries group=%s event_id=%s type=%s "
                             "attempts=%s; sending to DLQ %s",
@@ -190,33 +236,7 @@ async def kafka_event_consumer(
                             n,
                             kafka_dlq_topic(),
                         )
-                        try:
-                            await _publish_dlq(
-                                producer,
-                                group_id=group_id,
-                                event=event if event is not None else {"raw": _raw_preview(msg.value)},
-                                topic=msg.topic,
-                                partition=msg.partition,
-                                offset=msg.offset,
-                                attempts=n,
-                                error=exc,
-                            )
-                        except Exception:
-                            # Do not commit: losing both processing and DLQ is silent data loss.
-                            # Keep seeking until DLQ publish succeeds (or the process is restarted).
-                            logger.exception(
-                                "DLQ publish failed group=%s event_id=%s offset=%s; "
-                                "not committing; will retry DLQ",
-                                group_id,
-                                event_id,
-                                msg.offset,
-                            )
-                            await asyncio.sleep(_RETRY_SLEEP_SECONDS)
-                            consumer.seek(tp, msg.offset)
-                            continue
-
-                        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
-                        attempts.pop(attempt_key, None)
+                        await _retry_dlq_only(event_payload, exc, n)
     finally:
         if producer_started:
             await producer.stop()
