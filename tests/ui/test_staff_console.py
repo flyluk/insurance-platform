@@ -82,7 +82,6 @@ def test_underwriting_case_details(page: Page, ui_base: str, api_client, agent_h
 
     wait_until(underwriting_case, timeout=45, desc=f"underwriting case for application {application['id']}")
 
-def test_underwriting_case_details(page: Page, ui_base: str):
     login_as(page, ui_base, "uw@insurance.local", "uw123456")
     nav(page).get_by_role("link", name="Underwriting").click()
     expect(page.get_by_role("heading", name="Underwriting")).to_be_visible()
@@ -107,7 +106,6 @@ def test_policy_list_and_detail(page: Page, ui_base: str, api_client, agent_head
 
     wait_until(bound_application, timeout=45, desc=f"application {application['id']} BOUND")
 
-def test_policy_list_and_detail(page: Page, ui_base: str):
     login_as(page, ui_base, "agent@insurance.local", "agent123")
     nav(page).get_by_role("link", name="Policies").click()
     expect(page.get_by_role("heading", name="Policy Admin")).to_be_visible()

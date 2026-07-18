@@ -12,6 +12,8 @@ data:
   DB_POOL_RECYCLE: "1800"
   KAFKA_BOOTSTRAP_SERVERS: "insurance-kafka.insurance.svc.cluster.local:9092"
   KAFKA_DOMAIN_EVENTS_TOPIC: "insurance.domain.events"
+  KAFKA_DOMAIN_EVENTS_DLQ_TOPIC: "insurance.domain.events.dlq"
+  KAFKA_HANDLER_MAX_RETRIES: "15"
   NEW_BUSINESS_URL: "http://new-business.insurance.svc.cluster.local:8000"
   UNDERWRITING_URL: "http://underwriting.insurance.svc.cluster.local:8000"
   POLICY_ADMIN_URL: "http://policy-admin.insurance.svc.cluster.local:8000"

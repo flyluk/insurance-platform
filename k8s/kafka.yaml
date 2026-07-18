@@ -118,4 +118,12 @@ spec:
                 --partitions 3 \
                 --replication-factor 1
               echo "Topic insurance.domain.events ready"
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server "${BOOTSTRAP}" \
+                --create \
+                --if-not-exists \
+                --topic insurance.domain.events.dlq \
+                --partitions 3 \
+                --replication-factor 1
+              echo "Topic insurance.domain.events.dlq ready"
               /opt/kafka/bin/kafka-topics.sh --bootstrap-server "${BOOTSTRAP}" --list

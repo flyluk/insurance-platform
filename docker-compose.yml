@@ -2,6 +2,8 @@
 x-kafka-env: &kafka_env
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   KAFKA_DOMAIN_EVENTS_TOPIC: insurance.domain.events
+  KAFKA_DOMAIN_EVENTS_DLQ_TOPIC: insurance.domain.events.dlq
+  KAFKA_HANDLER_MAX_RETRIES: "15"
 
 services:
   postgres:
