@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
 
@@ -72,12 +72,17 @@ export default function Plans() {
   });
 
   const selected = useMemo(() => plans.find((p) => p.id === selectedId) || null, [plans, selectedId]);
+  const lineRef = useRef(line);
+  lineRef.current = line;
 
   async function refresh() {
+    const requested = line;
     const [p, r] = await Promise.all([
-      api.get("/products/plans", { params: { product_code: line } }),
-      api.get("/products/riders", { params: { product_code: line } }),
+      api.get("/products/plans", { params: { product_code: requested } }),
+      api.get("/products/riders", { params: { product_code: requested } }),
     ]);
+    // Ignore stale responses after the user switched product lines.
+    if (lineRef.current !== requested) return;
     setPlans(p.data);
     setLineRiders(r.data);
     setSelectedId((prev) => {
@@ -90,6 +95,7 @@ export default function Plans() {
 
   useEffect(() => {
     setPlans([]);
+    setLineRiders([]);
     setSelectedId("");
     setRates([]);
     setAttachIds([]);
@@ -100,14 +106,22 @@ export default function Plans() {
 
   useEffect(() => {
     if (!selected) return;
+    let cancelled = false;
     setAttachIds(selected.riders.map((r) => r.id));
     setSchemaDraft(selected.risk_schema?.length ? [...selected.risk_schema] : []);
     setUwJson(JSON.stringify(selected.uw_rules || { decline: [], refer: [] }, null, 2));
     setRateForm((f) => ({ ...f, amount: selected.base_premium }));
     api
       .get(`/products/plans/${selected.id}/rates`)
-      .then((res) => setRates(res.data))
-      .catch(console.error);
+      .then((res) => {
+        if (!cancelled) setRates(res.data);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error(err);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selected]);
 
   async function createPlan(e: FormEvent) {

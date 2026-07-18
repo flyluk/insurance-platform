@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
 
@@ -25,13 +25,18 @@ export default function Riders() {
     description: "",
     premium: 0,
   });
+  const lineRef = useRef(line);
+  lineRef.current = line;
 
   async function refresh() {
-    const { data } = await api.get("/products/riders", { params: { product_code: line } });
+    const requested = line;
+    const { data } = await api.get("/products/riders", { params: { product_code: requested } });
+    if (lineRef.current !== requested) return;
     setRiders(data);
   }
 
   useEffect(() => {
+    setRiders([]);
     refresh().catch(console.error);
   }, [line]);
 

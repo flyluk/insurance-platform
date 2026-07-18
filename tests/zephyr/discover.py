@@ -75,6 +75,24 @@ def _objective(item: pytest.Item) -> str | None:
     return doc.splitlines()[0].strip()
 
 
+def resolve_zephyr_key(
+    *,
+    nodeid: str,
+    marker_key: str | None,
+    mapping: dict[str, str],
+) -> str | None:
+    """Prefer mapping.json over @pytest.mark.zephyr so recreated keys stick.
+
+    After sync recreates a deleted case it updates mapping; the marker may still
+    name the old key. Marker-first resolution would ignore mapping and recreate
+    another duplicate on every run.
+    """
+    mapped = mapping.get(nodeid)
+    if mapped:
+        return mapped
+    return marker_key
+
+
 def discover_tests(args: list[str] | None = None) -> list[DiscoveredTest]:
     """Collect pytest items without executing tests."""
     root = repo_root()
@@ -84,7 +102,10 @@ def discover_tests(args: list[str] | None = None) -> list[DiscoveredTest]:
     class CollectorPlugin:
         def pytest_collection_finish(self, session: pytest.Session) -> None:
             for item in session.items:
-                zephyr = _marker_arg(item, "zephyr") or mapping.get(item.nodeid)
+                marker_key = _marker_arg(item, "zephyr")
+                zephyr = resolve_zephyr_key(
+                    nodeid=item.nodeid, marker_key=marker_key, mapping=mapping
+                )
                 story = _marker_arg(item, "story")
                 collected.append(
                     DiscoveredTest(

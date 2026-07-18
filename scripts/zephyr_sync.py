@@ -95,7 +95,10 @@ def main() -> int:
                             raise ZephyrScaleError(f"Create response missing key: {created_case}")
                         mapping[test.nodeid] = key
                         created += 1
-                        print(f"recreated {key} <- {test.nodeid}")
+                        print(
+                            f"recreated {key} <- {test.nodeid} "
+                            f"(mapping updated; prefer mapping over stale @pytest.mark.zephyr)"
+                        )
                 else:
                     created_case = zephyr.create_test_case(
                         name=name, objective=objective, labels=labels
@@ -129,7 +132,8 @@ def main() -> int:
     path = save_mapping(mapping)
     print(f"Done. created={created} updated={updated} linked={linked} mapping={path}")
     print(
-        'Tip: add @pytest.mark.zephyr("<KEY>") from mapping.json for stable keys in source.'
+        "Tip: keep @pytest.mark.zephyr in sync with mapping.json; "
+        "sync prefers mapping when both differ so recreated keys do not duplicate."
     )
     return 0
 

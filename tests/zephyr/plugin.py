@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from zephyr.discover import load_mapping
+from zephyr.discover import load_mapping, resolve_zephyr_key
 
 _ZEPHYR_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-T\d+$")
 
@@ -32,14 +32,15 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "story(key): Jira story key for Zephyr coverage (e.g. INS-123)")
 
 
-def _zephyr_key(item: pytest.Item, mapping: dict[str, str]) -> str | None:
+def _marker_zephyr_key(item: pytest.Item) -> str | None:
     marker = item.get_closest_marker("zephyr")
-    if marker:
-        if marker.args:
-            return str(marker.args[0])
-        if marker.kwargs.get("key"):
-            return str(marker.kwargs["key"])
-    return mapping.get(item.nodeid)
+    if not marker:
+        return None
+    if marker.args:
+        return str(marker.args[0])
+    if marker.kwargs.get("key"):
+        return str(marker.kwargs["key"])
+    return None
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -47,7 +48,11 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         return
     mapping = load_mapping()
     for item in items:
-        key = _zephyr_key(item, mapping)
+        key = resolve_zephyr_key(
+            nodeid=item.nodeid,
+            marker_key=_marker_zephyr_key(item),
+            mapping=mapping,
+        )
         if not key:
             continue
         if not _ZEPHYR_KEY_RE.match(key):
