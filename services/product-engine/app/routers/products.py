@@ -513,12 +513,25 @@ def resolve_quote(body: QuoteResolveIn, db: Session = Depends(get_db)):
 
 @router.post("/evaluate-uw", response_model=EvaluateUwOut)
 def evaluate_uw(body: EvaluateUwIn, db: Session = Depends(get_db)):
-    """Public for underwriting service-to-service decisions."""
-    plan = None
+    """Public for underwriting service-to-service decisions.
+
+    Prefer the given plan_id when it exists and is published; otherwise fall back
+    to a published plan for product_code so callers still get DB-backed rules
+    instead of HTTP errors that force local UW fallbacks.
+    """
+    plan: Plan | None = None
     if body.plan_id:
-        plan = _load_plan(db, body.plan_id)
-        if plan.status != "PUBLISHED":
-            raise HTTPException(400, "Plan is not published")
+        plan = db.get(Plan, body.plan_id)
+        if plan is not None and plan.status != "PUBLISHED":
+            plan = None
+    if plan is None and body.product_code:
+        plan = (
+            db.query(Plan)
+            .filter(Plan.product_code == body.product_code.upper(), Plan.status == "PUBLISHED")
+            .order_by(Plan.sort_order, Plan.name)
+            .first()
+        )
+
     raw_rules = plan.uw_rules if plan else None
     # Empty {"decline":[],"refer":[]} is truthy but has no thresholds — use product defaults.
     if not raw_rules or not (raw_rules.get("decline") or raw_rules.get("refer")):
