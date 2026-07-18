@@ -44,6 +44,16 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: KAFKA_DOMAIN_EVENTS_TOPIC
+            - name: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+            - name: KAFKA_HANDLER_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_HANDLER_MAX_RETRIES
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -130,6 +140,16 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: KAFKA_DOMAIN_EVENTS_TOPIC
+            - name: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+            - name: KAFKA_HANDLER_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_HANDLER_MAX_RETRIES
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -216,6 +236,16 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: KAFKA_DOMAIN_EVENTS_TOPIC
+            - name: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+            - name: KAFKA_HANDLER_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_HANDLER_MAX_RETRIES
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -302,6 +332,16 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: KAFKA_DOMAIN_EVENTS_TOPIC
+            - name: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+            - name: KAFKA_HANDLER_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_HANDLER_MAX_RETRIES
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
@@ -388,6 +428,16 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: KAFKA_DOMAIN_EVENTS_TOPIC
+            - name: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_DOMAIN_EVENTS_DLQ_TOPIC
+            - name: KAFKA_HANDLER_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: KAFKA_HANDLER_MAX_RETRIES
             - name: UVICORN_WORKERS
               valueFrom:
                 configMapKeyRef:
