@@ -70,6 +70,15 @@ def _require_reader(user: dict | None) -> dict:
     return user
 
 
+def _require_product(user: dict | None) -> dict:
+    """Draft catalog (plans/riders) is Product Studio only."""
+    if user is None:
+        raise HTTPException(401, "Not authenticated")
+    if user.get("role") not in {"product", "admin"}:
+        raise HTTPException(403, "Insufficient role")
+    return user
+
+
 def _rider_out(db: Session, rider: Rider, as_of: date | None = None) -> RiderOut:
     amount, _ = resolve_rider_amount(db, rider, as_of)
     data = RiderOut.model_validate(rider)
@@ -144,8 +153,9 @@ def list_plans(
     db: Session = Depends(get_db),
     user: dict | None = Depends(_optional_user),
 ):
+    # Published catalog may be anonymous; draft/working lists are product/admin only.
     if not status or status.upper() != "PUBLISHED":
-        _require_reader(user)
+        _require_product(user)
     q = db.query(Plan).options(joinedload(Plan.plan_riders).joinedload(PlanRider.rider))
     if product_code:
         q = q.filter(Plan.product_code == product_code.upper())
@@ -172,7 +182,7 @@ def get_plan(
 ):
     plan = _load_plan(db, plan_id)
     if plan.status != "PUBLISHED":
-        _require_reader(user)
+        _require_product(user)
     return _plan_out(db, plan, as_of, include_uw_rules=user is not None)
 
 
@@ -302,7 +312,7 @@ def list_riders(
     user: dict | None = Depends(_optional_user),
 ):
     if not status or status.upper() != "PUBLISHED":
-        _require_reader(user)
+        _require_product(user)
     q = db.query(Rider)
     if product_code:
         q = q.filter(Rider.product_code == product_code.upper())
@@ -323,7 +333,7 @@ def get_rider(
     if not rider:
         raise HTTPException(404, "Rider not found")
     if rider.status != "PUBLISHED":
-        _require_reader(user)
+        _require_product(user)
     return _rider_out(db, rider, as_of)
 
 

@@ -580,3 +580,35 @@ def test_publishing_rate_end_dates_prior_published_version(api_client):
     )
     assert resolve.status_code == 200
     assert resolve.json()["plan_amount"] == 777
+
+
+def test_agent_cannot_list_or_get_draft_plans(api_client, agent_headers):
+    """Draft plans (uw_rules/schema) are product/admin only — not any READ_ROLES JWT."""
+    product = _auth_headers(api_client, "product")
+    code = f"T-{unique_email('draft')[:8].upper()}"
+    create = api_client.post(
+        "/api/products/plans",
+        headers=product,
+        json={
+            "product_code": "AUTO",
+            "code": code,
+            "name": "Secret Draft",
+            "base_premium": 100,
+            "uw_rules": {
+                "decline": [{"all": [{"field": "x", "op": "eq", "value": 1}], "reason": "secret"}],
+                "refer": [],
+            },
+        },
+    )
+    assert create.status_code == 200
+    draft = create.json()
+
+    listing = api_client.get(
+        "/api/products/plans",
+        headers=agent_headers,
+        params={"product_code": "AUTO"},
+    )
+    assert listing.status_code == 403
+
+    got = api_client.get(f"/api/products/plans/{draft['id']}", headers=agent_headers)
+    assert got.status_code == 403

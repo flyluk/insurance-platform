@@ -1,4 +1,4 @@
-"""Underwriting rules — prefer product-engine thresholds, fallback to local defaults."""
+"""Underwriting rules — prefer product-engine thresholds, fallback carefully."""
 
 from __future__ import annotations
 
@@ -62,7 +62,12 @@ def evaluate(
     *,
     plan_id: str | None = None,
 ) -> tuple[str, str]:
-    """Return (decision, reason) where decision in ACCEPT|REFER|DECLINE."""
+    """Return (decision, reason) where decision in ACCEPT|REFER|DECLINE.
+
+    When a plan_id is present, catalog rules must be used. If product-engine is
+    unreachable or returns an unusable body, REFER for manual review instead of
+    applying line-default local rules that ignore the plan (including auto-bind).
+    """
     url = f"{settings.product_engine_url.rstrip('/')}/api/products/evaluate-uw"
     try:
         resp = httpx.post(
@@ -88,4 +93,7 @@ def evaluate(
                     return decision, reason
     except httpx.HTTPError:
         pass
+
+    if plan_id:
+        return "REFER", "Product catalog unavailable — manual underwriting required"
     return _local_fallback(product_code, risk, annual_premium)

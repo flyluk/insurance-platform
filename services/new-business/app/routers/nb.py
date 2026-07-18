@@ -53,18 +53,19 @@ def create_quote(body: QuoteCreate, db: Session = Depends(get_db), _=Depends(age
 
     plan = selection["plan"]
     riders = selection["riders"]
+    rider_ids = [r["id"] for r in riders]
     risk = dict(body.risk_attributes or {})
     risk["product_selection"] = {
         "plan_id": plan["id"],
         "plan_code": plan["code"],
-        "rider_ids": [r["id"] for r in riders],
+        "rider_ids": rider_ids,
         "rider_codes": [r["code"] for r in riders],
     }
     quote = Quote(
         party_id=body.party_id,
         product_code=body.product_code,
         plan_id=body.plan_id,
-        rider_ids=body.rider_ids,
+        rider_ids=rider_ids,
         risk_attributes=risk,
         status="DRAFT",
     )
