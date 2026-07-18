@@ -52,10 +52,6 @@ export default function PolicyDetail() {
     const [p, e] = await Promise.all([
       api.get(`/policies/${requestedId}`),
       api.get(`/policies/${requestedId}/endorsements`).catch((endorsementsError) => {
-    if (!id) return;
-    const [p, e] = await Promise.all([
-      api.get(`/policies/${id}`),
-      api.get(`/policies/${id}/endorsements`).catch((endorsementsError) => {
         console.error(endorsementsError);
         return null;
       }),
@@ -63,9 +59,6 @@ export default function PolicyDetail() {
     if (!isCurrent() || activeId.current !== requestedId) return;
     setPolicy(p.data);
     setEndorsements(e?.data ?? []);
-    if (!isCurrent()) return;
-    setPolicy(p.data);
-    if (e) setEndorsements(e.data);
     setError("");
   }
 
