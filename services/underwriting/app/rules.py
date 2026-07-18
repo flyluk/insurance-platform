@@ -43,6 +43,9 @@ def _local_fallback(product_code: str, risk: dict[str, Any], annual_premium: flo
     return "REFER", "Unknown product — manual review"
 
 
+_VALID_DECISIONS = frozenset({"ACCEPT", "REFER", "DECLINE"})
+
+
 def _service_headers() -> dict[str, str]:
     token = create_access_token(
         subject="service-underwriting",
@@ -89,8 +92,12 @@ def evaluate(
             if isinstance(body, dict):
                 decision = body.get("decision")
                 reason = body.get("reason")
-                if isinstance(decision, str) and isinstance(reason, str):
-                    return decision, reason
+                if (
+                    isinstance(decision, str)
+                    and isinstance(reason, str)
+                    and decision.upper() in _VALID_DECISIONS
+                ):
+                    return decision.upper(), reason
     except httpx.HTTPError:
         pass
 
