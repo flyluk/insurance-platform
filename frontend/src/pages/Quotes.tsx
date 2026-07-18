@@ -106,6 +106,7 @@ export default function Quotes() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const controller = new AbortController();
     api
       .get("/products/plans", {
@@ -113,6 +114,9 @@ export default function Quotes() {
         signal: controller.signal,
       })
       .then((r) => {
+        // Abort alone does not stop .then for a request that already completed;
+        // ignore stale responses after the user switches product.
+        if (cancelled) return;
         setPlans(r.data);
         const first = r.data[0] as ProductPlan | undefined;
         setPlanId(first ? first.id : "");
@@ -120,9 +124,12 @@ export default function Quotes() {
         setRisk(defaultsFromSchema(first?.risk_schema || []));
       })
       .catch((error) => {
-        if (!controller.signal.aborted) console.error(error);
+        if (!cancelled && !controller.signal.aborted) console.error(error);
       });
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [product]);
 
   const selectedPlan = useMemo(() => plans.find((p) => p.id === planId) || null, [plans, planId]);

@@ -31,7 +31,10 @@ def _backfill_plan_metadata(db) -> None:
         if not plan.risk_schema:
             plan.risk_schema = RISK_SCHEMAS.get(plan.product_code, [])
             changed = True
-        if not plan.uw_rules:
+        # Column default is {"decline":[],"refer":[]} — treat that as unset so product
+        # defaults (decline/refer thresholds) are applied for existing plans.
+        rules = plan.uw_rules or {}
+        if not (rules.get("decline") or rules.get("refer")):
             plan.uw_rules = UW_RULES.get(plan.product_code, {"decline": [], "refer": []})
             changed = True
         if changed:

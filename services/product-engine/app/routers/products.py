@@ -519,9 +519,13 @@ def evaluate_uw(body: EvaluateUwIn, db: Session = Depends(get_db)):
         plan = _load_plan(db, body.plan_id)
         if plan.status != "PUBLISHED":
             raise HTTPException(400, "Plan is not published")
-    rules = (plan.uw_rules if plan else None) or UW_RULES.get(
-        (body.product_code or "").upper(), {"decline": [], "refer": []}
-    )
+    raw_rules = plan.uw_rules if plan else None
+    # Empty {"decline":[],"refer":[]} is truthy but has no thresholds — use product defaults.
+    if not raw_rules or not (raw_rules.get("decline") or raw_rules.get("refer")):
+        code = (plan.product_code if plan else body.product_code or "").upper()
+        rules = UW_RULES.get(code, {"decline": [], "refer": []})
+    else:
+        rules = raw_rules
     decision, reason = evaluate_uw_rules(
         rules,
         body.risk_attributes,
