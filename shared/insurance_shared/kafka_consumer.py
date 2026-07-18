@@ -9,12 +9,16 @@ from collections.abc import Callable, Set
 from typing import Any
 
 from aiokafka import AIOKafkaConsumer
+from aiokafka.structs import OffsetAndMetadata
 
 from insurance_shared.events import kafka_bootstrap, kafka_topic
 
 logger = logging.getLogger(__name__)
 
 EventHandler = Callable[[dict[str, Any]], None]
+
+# Backoff before retrying a failed event so transient gaps (e.g. missing app row) can resolve.
+_RETRY_SLEEP_SECONDS = 2.0
 
 
 async def kafka_event_consumer(
@@ -34,21 +38,31 @@ async def kafka_event_consumer(
     await consumer.start()
     logger.info("Kafka consumer started group=%s topic=%s", group_id, kafka_topic())
     try:
-        async for msg in consumer:
-            event = msg.value
-            event_type = event.get("event_type")
-            if event_type not in handled_types:
-                await consumer.commit()
+        # Use getmany (not async-for) so a failed handler can seek back to the same
+        # offset. Committing a later message must never skip an unprocessed one.
+        while True:
+            batches = await consumer.getmany(timeout_ms=1000, max_records=1)
+            if not batches:
+                await asyncio.sleep(0.05)
                 continue
-            try:
-                await asyncio.to_thread(handler, event)
-                await consumer.commit()
-            except Exception:
-                logger.exception(
-                    "Event handler failed group=%s event_id=%s type=%s",
-                    group_id,
-                    event.get("event_id"),
-                    event_type,
-                )
+            for tp, messages in batches.items():
+                for msg in messages:
+                    event = msg.value
+                    event_type = event.get("event_type")
+                    if event_type not in handled_types:
+                        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
+                        continue
+                    try:
+                        await asyncio.to_thread(handler, event)
+                        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
+                    except Exception:
+                        logger.exception(
+                            "Event handler failed group=%s event_id=%s type=%s; will retry",
+                            group_id,
+                            event.get("event_id"),
+                            event_type,
+                        )
+                        await asyncio.sleep(_RETRY_SLEEP_SECONDS)
+                        consumer.seek(tp, msg.offset)
     finally:
         await consumer.stop()

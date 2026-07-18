@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,8 +16,6 @@ from app.schemas import (
     PaymentOut,
 )
 from insurance_shared.auth import make_auth_dependency
-from insurance_shared.events import already_processed, mark_processed
-from insurance_shared.metrics import record_event
 
 router = APIRouter(tags=["finance"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
@@ -44,62 +41,11 @@ def _post_journal(
 
 
 @router.post("/events")
-def consume_event(body: DomainEventIn, db: Session = Depends(get_db)):
-    if already_processed(db, body.event_id):
-        return {"status": "duplicate"}
+def consume_event(body: DomainEventIn):
+    """HTTP ingress for domain events — same handler as the Kafka consumer."""
+    from app.event_handlers import handle_domain_event
 
-    if body.event_type == "PremiumDue":
-        amount = float(body.payload["amount"])
-        inv = Invoice(
-            invoice_number=f"INV-{uuid.uuid4().hex[:8].upper()}",
-            policy_id=body.payload.get("policy_id"),
-            party_id=body.payload["party_id"],
-            invoice_type=body.payload.get("invoice_type") or "PREMIUM",
-            amount=amount,
-            status="OPEN",
-            description=f"Premium for policy {body.payload.get('policy_number')}",
-        )
-        db.add(inv)
-        db.flush()
-        _post_journal(
-            db,
-            reference_type="invoice",
-            reference_id=inv.id,
-            memo=f"Premium receivable {inv.invoice_number}",
-            debit_account="AR_PREMIUM",
-            credit_account="PREMIUM_REVENUE",
-            amount=amount,
-        )
-        record_event("PremiumDue", "consumed", settings.service_name)
-
-    elif body.event_type == "ClaimPaymentRequested":
-        claim_id = body.payload["claim_id"]
-        existing = db.query(ClaimDisbursement).filter(ClaimDisbursement.claim_id == claim_id).first()
-        if not existing:
-            amount = float(body.payload["amount"])
-            disb = ClaimDisbursement(
-                claim_id=claim_id,
-                claim_number=body.payload["claim_number"],
-                policy_id=body.payload["policy_id"],
-                party_id=body.payload["party_id"],
-                amount=amount,
-                status="PAID",
-            )
-            db.add(disb)
-            db.flush()
-            _post_journal(
-                db,
-                reference_type="claim_payment",
-                reference_id=disb.id,
-                memo=f"Claim payment {body.payload['claim_number']}",
-                debit_account="CLAIMS_EXPENSE",
-                credit_account="CASH",
-                amount=amount,
-            )
-            record_event("ClaimPaymentRequested", "consumed", settings.service_name)
-
-    mark_processed(db, body.event_id, body.event_type)
-    db.commit()
+    handle_domain_event(body.model_dump())
     return {"status": "ok"}
 
 

@@ -68,7 +68,7 @@ kubectl apply -f "${ROOT_DIR}/k8s/kafka.yaml"
 echo "Waiting for Kafka..."
 kubectl rollout status deployment/insurance-kafka -n "${NAMESPACE}" --timeout=300s
 kubectl wait --for=condition=complete job/insurance-kafka-topic-init \
-  -n "${NAMESPACE}" --timeout=180s || true
+  -n "${NAMESPACE}" --timeout=180s
 
 POSTGRES_HOST="${RELEASE}-postgresql.${NAMESPACE}.svc.cluster.local"
 mkurl() { echo "postgresql://insurance:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/$1"; }
