@@ -303,6 +303,53 @@ def test_evaluate_uw_respects_empty_plan_rules(api_client):
     assert body["plan_id"] == plan["id"]
 
 
+def test_evaluate_uw_invalid_plan_id_uses_line_defaults_not_another_plan(api_client):
+    """Invalid/missing plan_id must not silently substitute another published plan.
+
+    A first-by-sort auto-bind plan would ACCEPT prior_claims=99; product-line
+    defaults DECLINE. Response plan_id must stay null when the given id is bad.
+    """
+    headers = _auth_headers(api_client, "product")
+    code = f"T-{unique_email('uwfb')[:8].upper()}"
+    create = api_client.post(
+        "/api/products/plans",
+        headers=headers,
+        json={
+            "product_code": "AUTO",
+            "code": code,
+            "name": "Would-be Substituted Auto-bind",
+            "base_premium": 900,
+            "sort_order": -100,
+            "uw_rules": {"decline": [], "refer": []},
+        },
+    )
+    assert create.status_code == 200
+    trap_plan = create.json()
+    published = api_client.post(f"/api/products/plans/{trap_plan['id']}/publish", headers=headers)
+    assert published.status_code == 200
+
+    payload = {
+        "product_code": "AUTO",
+        "annual_premium": 1000,
+        "risk_attributes": {
+            "vehicle_year": 2020,
+            "drivers": 1,
+            "prior_claims": 99,
+            "driver_age": 40,
+        },
+    }
+    for plan_id in (None, "00000000-0000-0000-0000-000000000000"):
+        body = {**payload}
+        if plan_id is not None:
+            body["plan_id"] = plan_id
+        resp = api_client.post("/api/products/evaluate-uw", headers=headers, json=body)
+        assert resp.status_code == 200
+        out = resp.json()
+        assert out["decision"] == "DECLINE"
+        assert out["plan_id"] is None
+        assert out["plan_id"] != trap_plan["id"]
+
+
 @pytest.mark.zephyr("KAN-T37")
 def test_product_can_create_rate_version(api_client):
     """Product role can draft and publish an effective-dated rate version."""
