@@ -106,8 +106,12 @@ export default function Quotes() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
     api
-      .get("/products/plans", { params: { product_code: product, status: "PUBLISHED" } })
+      .get("/products/plans", {
+        params: { product_code: product, status: "PUBLISHED" },
+        signal: controller.signal,
+      })
       .then((r) => {
         setPlans(r.data);
         const first = r.data[0] as ProductPlan | undefined;
@@ -115,7 +119,10 @@ export default function Quotes() {
         setSelectedRiders([]);
         setRisk(defaultsFromSchema(first?.risk_schema || []));
       })
-      .catch(console.error);
+      .catch((error) => {
+        if (!controller.signal.aborted) console.error(error);
+      });
+    return () => controller.abort();
   }, [product]);
 
   const selectedPlan = useMemo(() => plans.find((p) => p.id === planId) || null, [plans, planId]);

@@ -516,14 +516,9 @@ def evaluate_uw(body: EvaluateUwIn, db: Session = Depends(get_db)):
     """Public for underwriting service-to-service decisions."""
     plan = None
     if body.plan_id:
-        plan = db.get(Plan, body.plan_id)
-    if not plan and body.product_code:
-        plan = (
-            db.query(Plan)
-            .filter(Plan.product_code == body.product_code.upper(), Plan.status == "PUBLISHED")
-            .order_by(Plan.sort_order)
-            .first()
-        )
+        plan = _load_plan(db, body.plan_id)
+        if plan.status != "PUBLISHED":
+            raise HTTPException(400, "Plan is not published")
     rules = (plan.uw_rules if plan else None) or UW_RULES.get(
         (body.product_code or "").upper(), {"decline": [], "refer": []}
     )
