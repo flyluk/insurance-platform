@@ -1,7 +1,7 @@
 import pytest
 from helpers import create_auto_quote, wait_until
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.story("KAN-2")]
 
 
 def test_quote_to_policy_to_invoice(api_client, agent_headers):

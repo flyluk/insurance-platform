@@ -58,6 +58,7 @@ services:
       DB_POOL_SIZE: "5"
       DB_MAX_OVERFLOW: "8"
       DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/nb_db
+      PRODUCT_ENGINE_URL: http://product-engine:8000
     ports:
       - "8001:8000"
     depends_on:
@@ -65,6 +66,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      product-engine:
+        condition: service_started
 
   underwriting:
     build:
@@ -75,6 +78,7 @@ services:
       JWT_SECRET: local-dev-secret-change-me
       UVICORN_WORKERS: "1"
       DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/uw_db
+      PRODUCT_ENGINE_URL: http://product-engine:8000
     ports:
       - "8002:8000"
     depends_on:
@@ -82,6 +86,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      product-engine:
+        condition: service_started
 
   policy-admin:
     build:
@@ -134,6 +140,20 @@ services:
       kafka:
         condition: service_healthy
 
+  product-engine:
+    build:
+      context: .
+      dockerfile: services/product-engine/Dockerfile
+    environment:
+      JWT_SECRET: local-dev-secret-change-me
+      UVICORN_WORKERS: "1"
+      DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/product_db
+    ports:
+      - "8006:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   gateway:
     build:
       context: .
@@ -147,6 +167,7 @@ services:
       POLICY_ADMIN_URL: http://policy-admin:8000
       CLAIMS_URL: http://claims:8000
       FINANCE_URL: http://finance:8000
+      PRODUCT_ENGINE_URL: http://product-engine:8000
     ports:
       - "8090:8000"
     depends_on:
@@ -155,12 +176,21 @@ services:
       - policy-admin
       - claims
       - finance
+      - product-engine
 
   web:
     build:
       context: ./frontend
     ports:
       - "8088:80"
+    depends_on:
+      - gateway
+
+  product-portal:
+    build:
+      context: ./product-portal
+    ports:
+      - "8089:80"
     depends_on:
       - gateway
 

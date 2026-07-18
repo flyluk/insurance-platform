@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api/client";
+import { useAuth } from "../components/AuthContext";
 
 type Policy = {
   id: string;
@@ -25,6 +26,27 @@ type Endorsement = {
   created_at: string;
 };
 
+type RiskField = {
+  key: string;
+  label: string;
+  type: "number" | "boolean" | "text" | "select";
+  required?: boolean;
+  default?: unknown;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: { value: string; label: string }[];
+};
+
+const CHANGE_TYPES = [
+  { value: "POLICY_CHANGE", label: "General policy change" },
+  { value: "COVERAGE_UPDATE", label: "Coverage update" },
+  { value: "VEHICLE_CHANGE", label: "Vehicle change" },
+  { value: "DRIVER_CHANGE", label: "Driver change" },
+  { value: "PROPERTY_CHANGE", label: "Property change" },
+  { value: "ADDRESS_CHANGE", label: "Address / location change" },
+];
+
 function formatRisk(attrs: Record<string, unknown> | null | undefined) {
   if (!attrs || !Object.keys(attrs).length) return null;
   return Object.entries(attrs).map(([key, value]) => (
@@ -35,14 +57,43 @@ function formatRisk(attrs: Record<string, unknown> | null | undefined) {
   ));
 }
 
+function pickSchema(
+  plans: { id: string; risk_schema?: RiskField[] }[],
+  attrs: Record<string, unknown>,
+): RiskField[] {
+  if (!plans.length) return [];
+  const selection = attrs.product_selection;
+  const planId =
+    selection && typeof selection === "object" && "plan_id" in selection
+      ? (selection as { plan_id?: unknown }).plan_id
+      : null;
+  const selected = plans.find((plan) => plan.id === planId);
+  if (selected) return selected.risk_schema || [];
+
+  const scored = plans.map((p) => {
+    const schema = p.risk_schema || [];
+    const hits = schema.filter((f) => f.key in attrs).length;
+    return { schema, hits };
+  });
+  scored.sort((a, b) => b.hits - a.hits);
+  return scored[0]?.schema || [];
+}
+
 export default function PolicyDetail() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [endorsements, setEndorsements] = useState<Endorsement[]>([]);
+  const [riskSchema, setRiskSchema] = useState<RiskField[]>([]);
   const [error, setError] = useState("");
-  const [endorseType, setEndorseType] = useState("COVERAGE_UPDATE");
-  const [endorseDesc, setEndorseDesc] = useState("Increase coverage");
-  const [premiumDelta, setPremiumDelta] = useState(50);
+  const [msg, setMsg] = useState("");
+  const [changeType, setChangeType] = useState("POLICY_CHANGE");
+  const [changeDesc, setChangeDesc] = useState("");
+  const [premiumDelta, setPremiumDelta] = useState(0);
+  const [riskDraft, setRiskDraft] = useState<Record<string, unknown>>({});
+  const [showChange, setShowChange] = useState(false);
+  const changeFormRef = useRef<HTMLFormElement>(null);
   const activeId = useRef(id);
   activeId.current = id;
 
@@ -58,8 +109,19 @@ export default function PolicyDetail() {
     ]);
     if (!isCurrent() || activeId.current !== requestedId) return;
     setPolicy(p.data);
+    setRiskDraft({ ...(p.data.risk_attributes || {}) });
     setEndorsements(e?.data ?? []);
     setError("");
+    try {
+      const plans = await api.get("/products/plans", {
+        params: { product_code: p.data.product_code, status: "PUBLISHED" },
+      });
+      if (!isCurrent() || activeId.current !== requestedId) return;
+      setRiskSchema(pickSchema(plans.data || [], p.data.risk_attributes || {}));
+    } catch (schemaErr) {
+      console.error(schemaErr);
+      setRiskSchema([]);
+    }
   }
 
   useEffect(() => {
@@ -67,6 +129,8 @@ export default function PolicyDetail() {
     setPolicy(null);
     setEndorsements([]);
     setError("");
+    setMsg("");
+    setShowChange(false);
     refresh(() => current).catch(() => {
       if (current) setError("Policy not found");
     });
@@ -78,23 +142,37 @@ export default function PolicyDetail() {
   async function renew() {
     if (!id) return;
     await api.post(`/policies/${id}/renew`);
+    setMsg("Policy renewed");
     await refresh();
   }
 
   async function cancel() {
     if (!id) return;
     await api.post(`/policies/${id}/cancel`);
+    setMsg("Policy cancelled");
+    setShowChange(false);
     await refresh();
   }
 
-  async function endorse(e: FormEvent) {
+  function openChangeForm() {
+    if (policy) setRiskDraft({ ...(policy.risk_attributes || {}) });
+    setShowChange(true);
+    setTimeout(() => changeFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  async function submitChange(e: FormEvent) {
     e.preventDefault();
-    if (!id) return;
+    if (!id || !policy) return;
     await api.post(`/policies/${id}/endorse`, {
-      endorsement_type: endorseType,
-      description: endorseDesc,
+      endorsement_type: changeType,
+      description: changeDesc || "Policy change",
       premium_delta: premiumDelta,
+      risk_attributes: riskDraft,
     });
+    setMsg("Policy change applied");
+    setChangeDesc("");
+    setPremiumDelta(0);
+    setShowChange(false);
     await refresh();
   }
 
@@ -113,6 +191,8 @@ export default function PolicyDetail() {
     return <div className="muted">Loading policy…</div>;
   }
 
+  const isActive = policy.status === "ACTIVE";
+
   return (
     <div className="stack">
       <div className="row">
@@ -127,6 +207,7 @@ export default function PolicyDetail() {
           <span className={`badge ${policy.status !== "ACTIVE" ? "bad" : ""}`}>{policy.status}</span>
         </p>
       </div>
+      {msg && <div className="muted">{msg}</div>}
 
       <div className="grid-2">
         <div className="panel stack">
@@ -167,6 +248,13 @@ export default function PolicyDetail() {
               <strong>{policy.updated_at.slice(0, 19).replace("T", " ")}</strong>
             </div>
           </div>
+          {isActive && isAdmin && (
+            <div className="row">
+              <button className="btn" type="button" onClick={openChangeForm}>
+                Policy change
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="panel stack">
@@ -175,41 +263,125 @@ export default function PolicyDetail() {
         </div>
       </div>
 
-      {policy.status === "ACTIVE" && (
-        <div className="grid-2">
-          <form className="panel stack" onSubmit={endorse}>
-            <h3>Endorse</h3>
-            <label>
-              Type
-              <input value={endorseType} onChange={(e) => setEndorseType(e.target.value)} required />
-            </label>
-            <label>
-              Description
-              <input value={endorseDesc} onChange={(e) => setEndorseDesc(e.target.value)} />
-            </label>
-            <label>
-              Premium delta
-              <input
-                type="number"
-                step="1"
-                value={premiumDelta}
-                onChange={(e) => setPremiumDelta(Number(e.target.value))}
-              />
-            </label>
+      {isActive && isAdmin && showChange && (
+        <form className="panel stack" id="policy-change" ref={changeFormRef} onSubmit={submitChange}>
+          <h3>Policy change</h3>
+          <p className="muted" style={{ margin: 0 }}>
+            Update coverage or risk details mid-term. Changes are recorded as endorsements.
+          </p>
+          <label>
+            Change type
+            <select value={changeType} onChange={(e) => setChangeType(e.target.value)} required>
+              {CHANGE_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Description
+            <input
+              value={changeDesc}
+              onChange={(e) => setChangeDesc(e.target.value)}
+              placeholder="What is changing?"
+            />
+          </label>
+          <label>
+            Premium delta ($)
+            <input
+              type="number"
+              step="1"
+              value={premiumDelta}
+              onChange={(e) => setPremiumDelta(Number(e.target.value))}
+            />
+          </label>
+
+          {riskSchema.length > 0 && (
+            <>
+              <h4>{policy.product_code} risk</h4>
+              {riskSchema.map((field) => {
+                if (field.type === "boolean") {
+                  return (
+                    <label key={field.key}>
+                      {field.label}
+                      <select
+                        value={riskDraft[field.key] ? "yes" : "no"}
+                        onChange={(e) =>
+                          setRiskDraft({ ...riskDraft, [field.key]: e.target.value === "yes" })
+                        }
+                      >
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </select>
+                    </label>
+                  );
+                }
+                if (field.type === "select" && field.options) {
+                  return (
+                    <label key={field.key}>
+                      {field.label}
+                      <select
+                        value={String(riskDraft[field.key] ?? field.default ?? "")}
+                        onChange={(e) => setRiskDraft({ ...riskDraft, [field.key]: e.target.value })}
+                      >
+                        {field.options.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                }
+                return (
+                  <label key={field.key}>
+                    {field.label}
+                    <input
+                      type={field.type === "number" ? "number" : "text"}
+                      min={field.min}
+                      max={field.max}
+                      step={field.step}
+                      value={
+                        (riskDraft[field.key] as string | number | undefined) ??
+                        (field.default as string | number | undefined) ??
+                        (field.type === "number" ? 0 : "")
+                      }
+                      onChange={(e) =>
+                        setRiskDraft({
+                          ...riskDraft,
+                          [field.key]:
+                            field.type === "number" ? Number(e.target.value) : e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                );
+              })}
+            </>
+          )}
+
+          <div className="row">
             <button className="btn" type="submit">
-              Apply endorsement
+              Apply policy change
             </button>
-          </form>
-          <div className="panel stack">
-            <h3>Actions</h3>
-            <div className="row">
-              <button className="btn" type="button" onClick={renew}>
-                Renew
-              </button>
-              <button className="btn danger" type="button" onClick={cancel}>
-                Cancel policy
-              </button>
-            </div>
+            <button className="btn ghost" type="button" onClick={() => setShowChange(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {isActive && (
+        <div className="panel stack">
+          <h3>Actions</h3>
+          <div className="row">
+            <button className="btn" type="button" onClick={renew}>
+              Renew
+            </button>
+            <button className="btn danger" type="button" onClick={cancel}>
+              Cancel policy
+            </button>
           </div>
         </div>
       )}

@@ -9,12 +9,14 @@ import httpx
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8090").rstrip("/")
 UI_BASE_URL = os.getenv("UI_BASE_URL", "http://localhost:8088").rstrip("/")
+PRODUCT_UI_BASE_URL = os.getenv("PRODUCT_UI_BASE_URL", "http://localhost:8089").rstrip("/")
 
 USERS = {
     "agent": ("agent@insurance.local", "agent123"),
     "underwriter": ("uw@insurance.local", "uw123456"),
     "claims": ("claims@insurance.local", "claims123"),
     "finance": ("finance@insurance.local", "finance123"),
+    "product": ("product@insurance.local", "product123"),
     "admin": ("admin@insurance.local", "admin123"),
 }
 
@@ -61,12 +63,24 @@ def create_auto_quote(client: httpx.Client, headers: dict[str, str]) -> tuple[di
     party.raise_for_status()
     party_data = party.json()
 
+    plans = client.get(
+        "/api/products/plans",
+        headers=headers,
+        params={"product_code": "AUTO", "status": "PUBLISHED"},
+    )
+    plans.raise_for_status()
+    plan_list = plans.json()
+    assert plan_list, "Expected seeded AUTO published plan"
+    plan = plan_list[0]
+
     quote = client.post(
         "/api/nb/quotes",
         headers=headers,
         json={
             "party_id": party_data["id"],
             "product_code": "AUTO",
+            "plan_id": plan["id"],
+            "rider_ids": [],
             "risk_attributes": {
                 "vehicle_year": 2022,
                 "drivers": 1,

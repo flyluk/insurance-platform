@@ -22,6 +22,8 @@ class Party(Base):
     phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     date_of_birth: Mapped[str | None] = mapped_column(String(32), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    id_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -31,6 +33,10 @@ class Quote(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     party_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     product_code: Mapped[str] = mapped_column(String(16), nullable=False)  # AUTO HOME LIFE
+    plan_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    rider_ids: Mapped[list] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"), default=lambda: []
+    )
     status: Mapped[str] = mapped_column(String(32), default="DRAFT")  # DRAFT RATED SUBMITTED
     risk_attributes: Mapped[dict] = mapped_column(JSON().with_variant(JSONB(), "postgresql"), default=dict)
     annual_premium: Mapped[float | None] = mapped_column(Float, nullable=True)

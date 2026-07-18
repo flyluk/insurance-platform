@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     new_business_events_url: str = "http://new-business:8000/events"
     policy_admin_events_url: str = "http://policy-admin:8000/events"
+    product_engine_url: str = "http://product-engine:8000"
 
     db_pool_size: int = 5
     db_max_overflow: int = 8

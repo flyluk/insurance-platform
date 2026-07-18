@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import Application, Party, Quote
+from app.product_catalog import ProductCatalogError, validate_quote_selection
 from app.rating import rate_quote
 from app.schemas import ApplicationOut, PartyCreate, PartyOut, QuoteCreate, QuoteOut
 from insurance_shared.auth import make_auth_dependency
@@ -41,10 +42,31 @@ def get_party(party_id: str, db: Session = Depends(get_db), _=Depends(auth)):
 def create_quote(body: QuoteCreate, db: Session = Depends(get_db), _=Depends(agent_auth)):
     if not db.get(Party, body.party_id):
         raise HTTPException(404, "Party not found")
+    try:
+        selection = validate_quote_selection(
+            product_code=body.product_code,
+            plan_id=body.plan_id,
+            rider_ids=body.rider_ids,
+        )
+    except ProductCatalogError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    plan = selection["plan"]
+    riders = selection["riders"]
+    rider_ids = [r["id"] for r in riders]
+    risk = dict(body.risk_attributes or {})
+    risk["product_selection"] = {
+        "plan_id": plan["id"],
+        "plan_code": plan["code"],
+        "rider_ids": rider_ids,
+        "rider_codes": [r["code"] for r in riders],
+    }
     quote = Quote(
         party_id=body.party_id,
         product_code=body.product_code,
-        risk_attributes=body.risk_attributes,
+        plan_id=body.plan_id,
+        rider_ids=rider_ids,
+        risk_attributes=risk,
         status="DRAFT",
     )
     db.add(quote)
@@ -71,7 +93,25 @@ def rate(quote_id: str, db: Session = Depends(get_db), _=Depends(agent_auth)):
     quote = db.get(Quote, quote_id)
     if not quote:
         raise HTTPException(404, "Quote not found")
-    quote.annual_premium = rate_quote(quote.product_code, quote.risk_attributes or {})
+    if not quote.plan_id:
+        raise HTTPException(400, "Quote has no plan; re-create against a published catalog plan")
+    try:
+        selection = validate_quote_selection(
+            product_code=quote.product_code,
+            plan_id=quote.plan_id,
+            rider_ids=list(quote.rider_ids or []),
+        )
+    except ProductCatalogError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    pricing = selection["pricing"]
+    base = float(pricing["plan_amount"])
+    rider_premiums = [float(r["amount"]) for r in pricing["riders"]]
+    quote.annual_premium = rate_quote(
+        quote.product_code,
+        quote.risk_attributes or {},
+        base_premium=base,
+        rider_premiums=rider_premiums,
+    )
     quote.status = "RATED"
     db.commit()
     db.refresh(quote)
@@ -88,6 +128,26 @@ def submit_application(quote_id: str, db: Session = Depends(get_db), _=Depends(a
     existing = db.query(Application).filter(Application.quote_id == quote_id).first()
     if existing:
         raise HTTPException(400, "Application already exists for quote")
+
+    if not quote.plan_id:
+        raise HTTPException(400, "Quote has no plan; re-create and rate before submit")
+    try:
+        selection = validate_quote_selection(
+            product_code=quote.product_code,
+            plan_id=quote.plan_id,
+            rider_ids=list(quote.rider_ids or []),
+        )
+    except ProductCatalogError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    pricing = selection["pricing"]
+    expected = rate_quote(
+        quote.product_code,
+        quote.risk_attributes or {},
+        base_premium=float(pricing["plan_amount"]),
+        rider_premiums=[float(r["amount"]) for r in pricing["riders"]],
+    )
+    if abs(float(expected) - float(quote.annual_premium)) > 0.01:
+        raise HTTPException(400, "Quote premium is out of date; re-rate before submit")
 
     app = Application(
         quote_id=quote.id,
@@ -108,6 +168,8 @@ def submit_application(quote_id: str, db: Session = Depends(get_db), _=Depends(a
         "product_code": quote.product_code,
         "annual_premium": quote.annual_premium,
         "risk_attributes": quote.risk_attributes or {},
+        "plan_id": quote.plan_id,
+        "rider_ids": quote.rider_ids or [],
     }
     enqueue_event(
         db,

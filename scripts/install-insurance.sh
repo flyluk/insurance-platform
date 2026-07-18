@@ -12,6 +12,7 @@ IMAGES=(
   "insurance-policy-admin:latest|services/policy-admin/Dockerfile"
   "insurance-claims:latest|services/claims/Dockerfile"
   "insurance-finance:latest|services/finance/Dockerfile"
+  "insurance-product-engine:latest|services/product-engine/Dockerfile"
   "insurance-gateway:latest|gateway/Dockerfile"
 )
 
@@ -85,6 +86,7 @@ kubectl create secret generic insurance-secrets \
   --from-literal=POLICY_DATABASE_URL="$(mkurl policy_db)" \
   --from-literal=CLAIMS_DATABASE_URL="$(mkurl claims_db)" \
   --from-literal=FINANCE_DATABASE_URL="$(mkurl finance_db)" \
+  --from-literal=PRODUCT_DATABASE_URL="$(mkurl product_db)" \
   --from-literal=IDENTITY_DATABASE_URL="$(mkurl identity_db)" \
   --dry-run=client -o yaml | kubectl apply -f -
 
@@ -98,6 +100,8 @@ for entry in "${IMAGES[@]}"; do
 done
 echo "  Building insurance-web:latest..."
 docker build -t insurance-web:latest "${ROOT_DIR}/frontend"
+echo "  Building insurance-product-portal:latest..."
+docker build -t insurance-product-portal:latest "${ROOT_DIR}/product-portal"
 
 echo "Importing images into MicroK8s..."
 import_img() {
@@ -114,6 +118,7 @@ for entry in "${IMAGES[@]}"; do
   import_img "${entry%%|*}"
 done
 import_img "insurance-web:latest"
+import_img "insurance-product-portal:latest"
 
 echo ""
 echo "Step 5/6: Deploying services..."
@@ -122,7 +127,7 @@ kubectl apply -f "${ROOT_DIR}/k8s/deployments.yaml"
 kubectl apply -f "${ROOT_DIR}/k8s/grafana-dashboard.yaml" 2>/dev/null || true
 kubectl apply -f "${ROOT_DIR}/k8s/servicemonitor.yaml" 2>/dev/null || true
 
-for dep in new-business underwriting policy-admin claims finance gateway web; do
+for dep in new-business underwriting policy-admin claims finance product-engine gateway web product-portal; do
   kubectl rollout status "deployment/${dep}" -n "${NAMESPACE}" --timeout=180s
 done
 
@@ -130,6 +135,7 @@ echo ""
 echo "Step 6/6: Waiting for LoadBalancer..."
 sleep 10
 WEB_IP=$(kubectl get svc web -n "${NAMESPACE}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+PORTAL_IP=$(kubectl get svc product-portal -n "${NAMESPACE}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
 
 echo ""
 echo "=========================================="
@@ -138,6 +144,7 @@ echo "=========================================="
 echo ""
 echo "Namespace: ${NAMESPACE}"
 echo "Web URL:   http://${WEB_IP:-<pending>}"
+echo "Product portal: http://${PORTAL_IP:-<pending>}"
 echo "Gateway:   http://gateway.${NAMESPACE}.svc.cluster.local:8000"
 echo ""
 echo "Demo logins (role @insurance.local):"
@@ -145,6 +152,7 @@ echo "  agent@insurance.local / agent123"
 echo "  uw@insurance.local / uw123456"
 echo "  claims@insurance.local / claims123"
 echo "  finance@insurance.local / finance123"
+echo "  product@insurance.local / product123"
 echo "  admin@insurance.local / admin123"
 echo ""
 echo "Secrets: insurance-secrets (${NAMESPACE})"

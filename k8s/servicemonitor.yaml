@@ -16,6 +16,7 @@ spec:
           - policy-admin
           - claims
           - finance
+          - product-engine
           - gateway
   namespaceSelector:
     matchNames:

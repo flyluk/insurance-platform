@@ -7,7 +7,7 @@ from jose import JWTError, jwt
 
 security = HTTPBearer(auto_error=False)
 
-ROLES = ("agent", "underwriter", "claims", "finance", "admin")
+ROLES = ("agent", "underwriter", "claims", "finance", "product", "admin")
 
 
 def create_access_token(

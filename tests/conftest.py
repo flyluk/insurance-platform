@@ -3,7 +3,9 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from helpers import API_BASE_URL, UI_BASE_URL, login
+from helpers import API_BASE_URL, PRODUCT_UI_BASE_URL, UI_BASE_URL, login
+
+pytest_plugins = ["zephyr.plugin"]
 
 
 @pytest.fixture(scope="session")
@@ -14,6 +16,11 @@ def api_base() -> str:
 @pytest.fixture(scope="session")
 def ui_base() -> str:
     return UI_BASE_URL
+
+
+@pytest.fixture(scope="session")
+def product_ui_base() -> str:
+    return PRODUCT_UI_BASE_URL
 
 
 @pytest.fixture(scope="session")

@@ -1,10 +1,11 @@
 import pytest
 from helpers import create_auto_quote, wait_until
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.story("KAN-4")]
 
 
 def test_claim_settlement_creates_disbursement(api_client, agent_headers, claims_headers, finance_headers):
+    """Settling a claim creates a paid finance disbursement."""
     _, quote = create_auto_quote(api_client, agent_headers)
     api_client.post(f"/api/nb/quotes/{quote['id']}/rate", headers=agent_headers).raise_for_status()
     app = api_client.post(f"/api/nb/quotes/{quote['id']}/submit", headers=agent_headers).json()

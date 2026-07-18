@@ -19,3 +19,4 @@ data:
   POLICY_ADMIN_URL: "http://policy-admin.insurance.svc.cluster.local:8000"
   CLAIMS_URL: "http://claims.insurance.svc.cluster.local:8000"
   FINANCE_URL: "http://finance.insurance.svc.cluster.local:8000"
+  PRODUCT_ENGINE_URL: "http://product-engine.insurance.svc.cluster.local:8000"

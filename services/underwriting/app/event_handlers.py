@@ -32,10 +32,14 @@ def handle_domain_event(event: dict) -> None:
                 db.commit()
                 return
 
+            risk_attrs = payload.get("risk_attributes") or {}
+            selection = risk_attrs.get("product_selection") or {}
+            plan_id = payload.get("plan_id") or selection.get("plan_id")
             decision, reason = evaluate(
                 payload["product_code"],
-                payload.get("risk_attributes") or {},
+                risk_attrs,
                 float(payload["annual_premium"]),
+                plan_id=plan_id,
             )
             case = UnderwritingCase(
                 application_id=payload["application_id"],

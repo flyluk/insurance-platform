@@ -3,19 +3,25 @@ import pytest
 pytestmark = pytest.mark.api
 
 
+@pytest.mark.story("KAN-3")
 def test_list_uw_cases(api_client, underwriter_headers):
+    """Underwriter can list UW cases."""
     resp = api_client.get("/api/uw/cases", headers=underwriter_headers)
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
 
 
+@pytest.mark.story("KAN-3")
 def test_list_uw_queue(api_client, underwriter_headers):
+    """Underwriter can list the referral queue."""
     resp = api_client.get("/api/uw/queue", headers=underwriter_headers)
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
 
 
+@pytest.mark.story("KAN-3")
 def test_list_policies(api_client, agent_headers):
+    """Agent can list policies and fetch detail when present."""
     resp = api_client.get("/api/policies", headers=agent_headers)
     assert resp.status_code == 200
     policies = resp.json()
@@ -28,13 +34,17 @@ def test_list_policies(api_client, agent_headers):
         assert "risk_attributes" in body
 
 
+@pytest.mark.story("KAN-4")
 def test_list_claims(api_client, claims_headers):
+    """Claims user can list claims."""
     resp = api_client.get("/api/claims", headers=claims_headers)
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
 
 
+@pytest.mark.story("KAN-4")
 def test_list_finance(api_client, finance_headers):
+    """Finance user can list invoices and ledger entries."""
     invoices = api_client.get("/api/finance/invoices", headers=finance_headers)
     assert invoices.status_code == 200
     assert isinstance(invoices.json(), list)

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     policy_admin_url: str = "http://policy-admin:8000"
     claims_url: str = "http://claims:8000"
     finance_url: str = "http://finance:8000"
+    product_engine_url: str = "http://product-engine:8000"
 
     db_pool_size: int = 5
     db_max_overflow: int = 8
