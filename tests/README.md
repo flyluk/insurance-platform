@@ -116,10 +116,3 @@ python scripts/zephyr_publish.py \
   --cycle-name "local $(git rev-parse --short HEAD)" \
   --auto-create-cases
 ```
-
-### CI
-
-[`.github/workflows/zephyr-tests.yml`](../.github/workflows/zephyr-tests.yml) runs pytest, uploads `reports/junit.xml` as an artifact, and (when secrets are set) syncs cases + publishes a Scale cycle.
-
-Required secrets: `API_BASE_URL`, `UI_BASE_URL`, `ZEPHYR_SCALE_TOKEN`, `ZEPHYR_PROJECT_KEY`.  
-Optional for story links: `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`.

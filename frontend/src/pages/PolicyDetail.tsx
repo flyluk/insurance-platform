@@ -57,8 +57,19 @@ function formatRisk(attrs: Record<string, unknown> | null | undefined) {
   ));
 }
 
-function pickSchema(plans: { risk_schema?: RiskField[] }[], attrs: Record<string, unknown>): RiskField[] {
+function pickSchema(
+  plans: { id: string; risk_schema?: RiskField[] }[],
+  attrs: Record<string, unknown>,
+): RiskField[] {
   if (!plans.length) return [];
+  const selection = attrs.product_selection;
+  const planId =
+    selection && typeof selection === "object" && "plan_id" in selection
+      ? (selection as { plan_id?: unknown }).plan_id
+      : null;
+  const selected = plans.find((plan) => plan.id === planId);
+  if (selected) return selected.risk_schema || [];
+
   const scored = plans.map((p) => {
     const schema = p.risk_schema || [];
     const hits = schema.filter((f) => f.key in attrs).length;

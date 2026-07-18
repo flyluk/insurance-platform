@@ -106,16 +106,30 @@ export default function Quotes() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
     api
-      .get("/products/plans", { params: { product_code: product, status: "PUBLISHED" } })
+      .get("/products/plans", {
+        params: { product_code: product, status: "PUBLISHED" },
+        signal: controller.signal,
+      })
       .then((r) => {
+        // Abort alone does not stop .then for a request that already completed;
+        // ignore stale responses after the user switches product.
+        if (cancelled) return;
         setPlans(r.data);
         const first = r.data[0] as ProductPlan | undefined;
         setPlanId(first ? first.id : "");
         setSelectedRiders([]);
         setRisk(defaultsFromSchema(first?.risk_schema || []));
       })
-      .catch(console.error);
+      .catch((error) => {
+        if (!cancelled && !controller.signal.aborted) console.error(error);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [product]);
 
   const selectedPlan = useMemo(() => plans.find((p) => p.id === planId) || null, [plans, planId]);

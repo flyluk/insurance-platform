@@ -31,7 +31,10 @@ def _backfill_plan_metadata(db) -> None:
         if not plan.risk_schema:
             plan.risk_schema = RISK_SCHEMAS.get(plan.product_code, [])
             changed = True
-        if not plan.uw_rules or not (plan.uw_rules.get("decline") or plan.uw_rules.get("refer")):
+        # Only backfill when uw_rules is missing entirely. Empty
+        # {"decline":[],"refer":[]} is a valid auto-bind configuration and must
+        # not be overwritten with product defaults on every startup.
+        if plan.uw_rules is None:
             plan.uw_rules = UW_RULES.get(plan.product_code, {"decline": [], "refer": []})
             changed = True
         if changed:
@@ -41,7 +44,7 @@ def _backfill_plan_metadata(db) -> None:
             .filter(RateVersion.plan_id == plan.id, RateVersion.status == "PUBLISHED")
             .first()
         )
-        if not has_rate:
+        if plan.status == "PUBLISHED" and not has_rate:
             db.add(
                 RateVersion(
                     plan_id=plan.id,
