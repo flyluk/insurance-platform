@@ -80,12 +80,21 @@ export default function Plans() {
     ]);
     setPlans(p.data);
     setLineRiders(r.data);
-    if (p.data[0] && !p.data.find((x: Plan) => x.id === selectedId)) {
-      setSelectedId(p.data[0].id);
-    }
+    setSelectedId((prev) => {
+      if (p.data[0] && !p.data.find((x: Plan) => x.id === prev)) {
+        return p.data[0].id;
+      }
+      return prev;
+    });
   }
 
   useEffect(() => {
+    setPlans([]);
+    setSelectedId("");
+    setRates([]);
+    setAttachIds([]);
+    setSchemaDraft([]);
+    setUwJson(JSON.stringify({ decline: [], refer: [] }, null, 2));
     refresh().catch(console.error);
   }, [line]);
 

@@ -92,20 +92,19 @@ def rate(quote_id: str, db: Session = Depends(get_db), _=Depends(agent_auth)):
     quote = db.get(Quote, quote_id)
     if not quote:
         raise HTTPException(404, "Quote not found")
-    base = None
-    rider_premiums: list[float] = []
-    if quote.plan_id:
-        try:
-            selection = validate_quote_selection(
-                product_code=quote.product_code,
-                plan_id=quote.plan_id,
-                rider_ids=list(quote.rider_ids or []),
-            )
-        except ProductCatalogError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        pricing = selection["pricing"]
-        base = float(pricing["plan_amount"])
-        rider_premiums = [float(r["amount"]) for r in pricing["riders"]]
+    if not quote.plan_id:
+        raise HTTPException(400, "Quote has no plan; re-create against a published catalog plan")
+    try:
+        selection = validate_quote_selection(
+            product_code=quote.product_code,
+            plan_id=quote.plan_id,
+            rider_ids=list(quote.rider_ids or []),
+        )
+    except ProductCatalogError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    pricing = selection["pricing"]
+    base = float(pricing["plan_amount"])
+    rider_premiums = [float(r["amount"]) for r in pricing["riders"]]
     quote.annual_premium = rate_quote(
         quote.product_code,
         quote.risk_attributes or {},

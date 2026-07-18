@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.config import settings
+from insurance_shared.auth import create_access_token
 
 
 def _local_fallback(product_code: str, risk: dict[str, Any], annual_premium: float) -> tuple[str, str]:
@@ -42,6 +43,18 @@ def _local_fallback(product_code: str, risk: dict[str, Any], annual_premium: flo
     return "REFER", "Unknown product — manual review"
 
 
+def _service_headers() -> dict[str, str]:
+    token = create_access_token(
+        subject="service-underwriting",
+        email="underwriting@internal",
+        role="underwriter",
+        secret=settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+        expire_minutes=30,
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
 def evaluate(
     product_code: str,
     risk: dict[str, Any],
@@ -54,6 +67,7 @@ def evaluate(
     try:
         resp = httpx.post(
             url,
+            headers=_service_headers(),
             json={
                 "plan_id": plan_id,
                 "product_code": product_code,

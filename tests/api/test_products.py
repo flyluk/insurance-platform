@@ -350,6 +350,87 @@ def test_evaluate_uw_invalid_plan_id_uses_line_defaults_not_another_plan(api_cli
         assert out["plan_id"] != trap_plan["id"]
 
 
+def test_evaluate_uw_rejects_mismatched_product_code(api_client):
+    """plan_id belonging to another line must not apply that plan's uw_rules."""
+    headers = _auth_headers(api_client, "product")
+    code = f"T-{unique_email('uwmm')[:8].upper()}"
+    create = api_client.post(
+        "/api/products/plans",
+        headers=headers,
+        json={
+            "product_code": "AUTO",
+            "code": code,
+            "name": "Mismatch Auto-bind",
+            "base_premium": 900,
+            "uw_rules": {"decline": [], "refer": []},
+        },
+    )
+    assert create.status_code == 200
+    plan = create.json()
+    assert api_client.post(f"/api/products/plans/{plan['id']}/publish", headers=headers).status_code == 200
+
+    # Empty AUTO rules would ACCEPT prior_claims=99; HOME line defaults DECLINE flood+high value.
+    # Mismatch must ignore the AUTO plan and use HOME defaults → still DECLINE for flood risk.
+    resp = api_client.post(
+        "/api/products/evaluate-uw",
+        headers=headers,
+        json={
+            "plan_id": plan["id"],
+            "product_code": "HOME",
+            "annual_premium": 1000,
+            "risk_attributes": {
+                "property_value": 600000,
+                "flood_zone": True,
+                "year_built": 2000,
+            },
+        },
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["decision"] == "DECLINE"
+    assert out["plan_id"] is None
+
+
+def test_create_plan_preserves_explicit_empty_risk_schema(api_client):
+    """Explicit risk_schema=[] must not be replaced with line RISK_SCHEMAS defaults."""
+    headers = _auth_headers(api_client, "product")
+    code = f"T-{unique_email('empty')[:8].upper()}"
+    create = api_client.post(
+        "/api/products/plans",
+        headers=headers,
+        json={
+            "product_code": "AUTO",
+            "code": code,
+            "name": "No Risk Fields",
+            "base_premium": 500,
+            "risk_schema": [],
+        },
+    )
+    assert create.status_code == 200
+    assert create.json()["risk_schema"] == []
+
+
+def test_resolve_quote_and_evaluate_uw_require_auth(api_client):
+    """Catalog pricing and UW evaluation must not be anonymously callable via gateway."""
+    plans = api_client.get("/api/products/plans", params={"product_code": "AUTO", "status": "PUBLISHED"})
+    assert plans.status_code == 200
+    plan_id = plans.json()[0]["id"]
+
+    resolve = api_client.post("/api/products/resolve-quote", json={"plan_id": plan_id, "rider_ids": []})
+    assert resolve.status_code == 401
+
+    evaluate = api_client.post(
+        "/api/products/evaluate-uw",
+        json={
+            "plan_id": plan_id,
+            "product_code": "AUTO",
+            "annual_premium": 800,
+            "risk_attributes": {},
+        },
+    )
+    assert evaluate.status_code == 401
+
+
 @pytest.mark.zephyr("KAN-T37")
 def test_product_can_create_rate_version(api_client):
     """Product role can draft and publish an effective-dated rate version."""

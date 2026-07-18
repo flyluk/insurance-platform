@@ -43,7 +43,7 @@ class PlanCreate(BaseModel):
     description: str | None = None
     base_premium: float = Field(ge=0)
     sort_order: int = 0
-    risk_schema: list[RiskField] = Field(default_factory=list)
+    risk_schema: list[RiskField] | None = None
     uw_rules: UwRules | None = None
 
 

@@ -30,6 +30,16 @@ from insurance_shared.auth import decode_token, make_auth_dependency
 
 router = APIRouter(prefix="/api/products", tags=["product-engine"])
 product_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "product", "admin")
+reader_auth = make_auth_dependency(
+    settings.jwt_secret,
+    settings.jwt_algorithm,
+    "agent",
+    "underwriter",
+    "product",
+    "admin",
+    "claims",
+    "finance",
+)
 _bearer = HTTPBearer(auto_error=False)
 
 LINES = ("AUTO", "HOME", "LIFE")
@@ -163,7 +173,10 @@ def create_plan(body: PlanCreate, db: Session = Depends(get_db), _=Depends(produ
     if existing:
         raise HTTPException(400, "Plan code already exists for this line")
     data = body.model_dump()
-    schema = data.pop("risk_schema") or RISK_SCHEMAS.get(body.product_code, [])
+    schema = data.pop("risk_schema")
+    # None = omitted → line defaults; explicit [] must be preserved (no risk fields).
+    if schema is None:
+        schema = RISK_SCHEMAS.get(body.product_code, [])
     rules = data.pop("uw_rules")
     if rules is None:
         rules = UW_RULES.get(body.product_code, {"decline": [], "refer": []})
@@ -476,8 +489,8 @@ def publish_rider_rate(
 
 
 @router.post("/resolve-quote", response_model=QuoteResolveOut)
-def resolve_quote(body: QuoteResolveIn, db: Session = Depends(get_db)):
-    """Public for new-business service-to-service rating."""
+def resolve_quote(body: QuoteResolveIn, db: Session = Depends(get_db), _=Depends(reader_auth)):
+    """Staff/service rating resolution — requires JWT (not anonymously gateway-callable)."""
     plan = _load_plan(db, body.plan_id)
     if plan.status != "PUBLISHED":
         raise HTTPException(400, "Plan is not published")
@@ -513,11 +526,11 @@ def resolve_quote(body: QuoteResolveIn, db: Session = Depends(get_db)):
 
 
 @router.post("/evaluate-uw", response_model=EvaluateUwOut)
-def evaluate_uw(body: EvaluateUwIn, db: Session = Depends(get_db)):
-    """Public for underwriting service-to-service decisions.
+def evaluate_uw(body: EvaluateUwIn, db: Session = Depends(get_db), _=Depends(reader_auth)):
+    """Staff/service UW evaluation — requires JWT.
 
-    Use the given published plan_id when valid. Do not silently substitute another
-    published plan for the line — that would apply the wrong stored uw_rules.
+    Use the given published plan_id when valid and product_code matches (when
+    provided). Do not apply another line's plan rules on a mismatched pair.
     When plan_id is missing/invalid, evaluate using product-line default rules so
     callers still get HTTP 200 (avoid forcing underwriting local fallback).
     """
@@ -525,7 +538,11 @@ def evaluate_uw(body: EvaluateUwIn, db: Session = Depends(get_db)):
     if body.plan_id:
         candidate = db.get(Plan, body.plan_id)
         if candidate is not None and candidate.status == "PUBLISHED":
-            plan = candidate
+            req_code = (body.product_code or "").upper()
+            if req_code and candidate.product_code.upper() != req_code:
+                plan = None
+            else:
+                plan = candidate
 
     if plan is not None:
         rules = plan.uw_rules if plan.uw_rules is not None else {"decline": [], "refer": []}
