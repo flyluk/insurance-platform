@@ -160,15 +160,15 @@ export default function Quotes() {
 
   async function searchClients(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !email.trim()) {
-      setMsg("Name and email are required to search");
+    if (!name.trim()) {
+      setMsg("Name is required to search");
       return;
     }
     setSearchBusy(true);
     setMsg("");
     try {
       const { data } = await api.get("/nb/parties/search", {
-        params: { name: name.trim(), email: email.trim() },
+        params: { name: name.trim() },
       });
       setSearchHits(data);
       setSearched(true);
@@ -264,7 +264,7 @@ export default function Quotes() {
         <form className="panel stack" onSubmit={searchClients}>
           <h3>Client search</h3>
           <p className="muted" style={{ margin: 0 }}>
-            Search existing clients by name and email before creating a new one.
+            Search existing clients by name before creating a new one.
           </p>
           <label>
             Full name
@@ -275,19 +275,6 @@ export default function Quotes() {
                 setSearched(false);
                 setSearchHits([]);
               }}
-              required
-            />
-          </label>
-          <label>
-            Email
-            <input
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setSearched(false);
-                setSearchHits([]);
-              }}
-              type="email"
               required
             />
           </label>
@@ -336,6 +323,10 @@ export default function Quotes() {
           <p className="muted" style={{ margin: 0 }}>
             Optional details for a new record. Use Force create even if matches were found.
           </p>
+          <label>
+            Email
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+          </label>
           <label>
             Date of birth
             <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" />

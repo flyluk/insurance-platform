@@ -44,8 +44,8 @@ def test_list_applications(api_client, agent_headers):
     assert isinstance(resp.json(), list)
 
 
-def test_search_parties_by_name_and_email(api_client, agent_headers):
-    """Client search requires name+email and returns matching parties."""
+def test_search_parties_by_name(api_client, agent_headers):
+    """Client search requires name and returns matching parties."""
     email = unique_email("search")
     created = api_client.post(
         "/api/nb/parties",
@@ -58,7 +58,7 @@ def test_search_parties_by_name_and_email(api_client, agent_headers):
     hits = api_client.get(
         "/api/nb/parties/search",
         headers=agent_headers,
-        params={"name": "Searchable", "email": email.split("@")[0]},
+        params={"name": "Searchable"},
     )
     assert hits.status_code == 200
     ids = {p["id"] for p in hits.json()}
@@ -67,7 +67,7 @@ def test_search_parties_by_name_and_email(api_client, agent_headers):
     missing = api_client.get(
         "/api/nb/parties/search",
         headers=agent_headers,
-        params={"name": "Searchable", "email": "nobody-matches@example.com"},
+        params={"name": "DefinitelyNoSuchClientXYZ"},
     )
     assert missing.status_code == 200
     assert missing.json() == []
@@ -75,6 +75,6 @@ def test_search_parties_by_name_and_email(api_client, agent_headers):
     bad = api_client.get(
         "/api/nb/parties/search",
         headers=agent_headers,
-        params={"name": "", "email": email},
+        params={"name": ""},
     )
     assert bad.status_code == 400
