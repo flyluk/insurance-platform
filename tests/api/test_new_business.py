@@ -23,6 +23,19 @@ def test_create_and_list_parties(api_client, agent_headers):
     assert party["id"] in ids
 
 
+def test_create_party_without_email(api_client, agent_headers):
+    """Email is optional when creating a client."""
+    create = api_client.post(
+        "/api/nb/parties",
+        headers=agent_headers,
+        json={"full_name": f"No Email Client {unique_email('noemail').split('@')[0]}"},
+    )
+    assert create.status_code == 200, create.text
+    party = create.json()
+    assert party["id"]
+    assert party["email"] in ("", None)
+
+
 def test_create_rate_quote(api_client, agent_headers):
     """Create an AUTO quote and rate it to a positive premium."""
     _, quote = create_auto_quote(api_client, agent_headers)
