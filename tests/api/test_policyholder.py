@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 
+import httpx
 import pytest
 from helpers import login
 
 pytestmark = [pytest.mark.api, pytest.mark.story("KAN-6")]
+
+FINANCE_URL = os.getenv("FINANCE_URL", "http://localhost:8005").rstrip("/")
 
 
 def _party_id(api_client) -> str:
@@ -15,15 +19,15 @@ def _party_id(api_client) -> str:
 
 
 def _ensure_open_invoice(api_client, headers: dict[str, str]) -> dict:
-    party_id = _party_id(api_client)
     invoices = api_client.get("/api/finance/invoices", headers=headers)
     invoices.raise_for_status()
     open_inv = next((i for i in invoices.json() if i["status"] == "OPEN"), None)
     if open_inv:
         return open_inv
 
-    # Create via PremiumDue event ingress (same path as policy bind)
+    party_id = _party_id(api_client)
     policies = api_client.get("/api/policies", headers=headers).json()
+    assert policies, "Expected seeded demo policy"
     policy = policies[0]
     event = {
         "event_id": str(uuid.uuid4()),
@@ -39,17 +43,8 @@ def _ensure_open_invoice(api_client, headers: dict[str, str]) -> dict:
             "invoice_type": "PREMIUM",
         },
     }
-    # Hit finance directly through gateway proxy — /events is unauthenticated on finance
-    # but not exposed under /api/finance; use finance staff to pay path only.
-    # Instead post through finance service port if available, or reuse seed by asserting seed exists.
-    # Fallback: mark that we need compose finance restart — prefer posting to service.
-    # Gateway does not map /events. Post to finance via docker-published port 8005 when present.
-    import httpx
-    import os
-
-    finance_url = os.getenv("FINANCE_URL", "http://localhost:8005").rstrip("/")
     with httpx.Client(timeout=15.0) as client:
-        resp = client.post(f"{finance_url}/events", json=event)
+        resp = client.post(f"{FINANCE_URL}/events", json=event)
         resp.raise_for_status()
 
     invoices = api_client.get("/api/finance/invoices", headers=headers)

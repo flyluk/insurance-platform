@@ -11,7 +11,7 @@ import Policies from "./pages/Policies";
 function Private({ children }: { children: ReactNode }) {
   const { token, user } = useAuth();
   if (!token || !user) return <Navigate to="/login" replace />;
-  if (user.role !== "policyholder" && user.role !== "admin") return <Navigate to="/login" replace />;
+  if (user.role !== "policyholder") return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 

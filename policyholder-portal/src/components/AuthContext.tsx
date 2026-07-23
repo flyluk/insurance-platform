@@ -16,7 +16,7 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const ALLOWED = new Set(["policyholder", "admin"]);
+const ALLOWED = new Set(["policyholder"]);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(localStorage.getItem("holder_portal_token"));
