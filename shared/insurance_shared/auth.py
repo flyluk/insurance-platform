@@ -7,7 +7,7 @@ from jose import JWTError, jwt
 
 security = HTTPBearer(auto_error=False)
 
-ROLES = ("agent", "underwriter", "claims", "finance", "product", "admin")
+ROLES = ("agent", "underwriter", "claims", "finance", "product", "admin", "policyholder")
 
 
 def create_access_token(
@@ -18,6 +18,7 @@ def create_access_token(
     secret: str,
     algorithm: str = "HS256",
     expire_minutes: int = 60,
+    party_id: str | None = None,
 ) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
     payload = {
@@ -26,6 +27,8 @@ def create_access_token(
         "role": role,
         "exp": expire,
     }
+    if party_id:
+        payload["party_id"] = party_id
     return jwt.encode(payload, secret, algorithm=algorithm)
 
 

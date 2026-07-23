@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from helpers import API_BASE_URL, PRODUCT_UI_BASE_URL, UI_BASE_URL, login
+from helpers import API_BASE_URL, HOLDER_UI_BASE_URL, PRODUCT_UI_BASE_URL, UI_BASE_URL, login
 
 pytest_plugins = ["zephyr.plugin"]
 
@@ -21,6 +21,11 @@ def ui_base() -> str:
 @pytest.fixture(scope="session")
 def product_ui_base() -> str:
     return PRODUCT_UI_BASE_URL
+
+
+@pytest.fixture(scope="session")
+def holder_ui_base() -> str:
+    return HOLDER_UI_BASE_URL
 
 
 @pytest.fixture(scope="session")
@@ -52,4 +57,10 @@ def claims_headers(api_client: httpx.Client) -> dict[str, str]:
 @pytest.fixture
 def finance_headers(api_client: httpx.Client) -> dict[str, str]:
     token = login(api_client, "finance")["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def policyholder_headers(api_client: httpx.Client) -> dict[str, str]:
+    token = login(api_client, "policyholder")["access_token"]
     return {"Authorization": f"Bearer {token}"}

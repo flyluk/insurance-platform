@@ -18,7 +18,10 @@ USERS = {
     "finance": ("finance@insurance.local", "finance123"),
     "product": ("product@insurance.local", "product123"),
     "admin": ("admin@insurance.local", "admin123"),
+    "policyholder": ("policyholder@insurance.local", "holder123"),
 }
+
+HOLDER_UI_BASE_URL = os.getenv("HOLDER_UI_BASE_URL", "http://localhost:8091").rstrip("/")
 
 
 def login(client: httpx.Client, role: str = "agent") -> dict[str, Any]:

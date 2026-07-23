@@ -16,7 +16,8 @@ insurance namespace
 ├── product-engine ×2   # plans + riders catalog
 ├── gateway ×2          # JWT auth + reverse proxy
 ├── web ×2              # React staff UI (LoadBalancer)
-└── product-portal ×2   # Product Studio UI (LoadBalancer)
+├── product-portal ×2   # Product Studio UI (LoadBalancer)
+└── policyholder-portal ×2  # Customer self-serve UI (LoadBalancer)
 ```
 
 Domain events use a **Postgres outbox → Kafka** pattern:
@@ -36,6 +37,7 @@ docker compose up --build
 |---------|-----|
 | Staff UI | http://localhost:8088 |
 | Product Studio | http://localhost:8089 |
+| Policyholder portal | http://localhost:8091 |
 | Gateway API | http://localhost:8090 |
 | Gateway docs | http://localhost:8090/docs |
 
@@ -49,6 +51,9 @@ docker compose up --build
 | finance@insurance.local | finance123 | finance |
 | product@insurance.local | product123 | product |
 | admin@insurance.local | admin123 | admin |
+| policyholder@insurance.local | holder123 | policyholder |
+
+The policyholder account is linked to a seeded party, active AUTO policy (`AUTO-DEMO0001`), and an open premium invoice for self-serve pay and FNOL demos.
 
 ### Product engine (plans & riders)
 
@@ -80,6 +85,16 @@ Redeploy after code changes:
 4. **Claims** → open FNOL on an active policy → settle (triggers finance disbursement)  
 5. **Finance** → pay premium invoices → view ledger  
 6. Sign in to **Product Studio** as **product** → manage plans/riders → publish for quoting  
+7. Sign in to **Policyholder portal** as **policyholder** → view policy → pay invoice (CARD/ACH) → file a claim  
+
+### Policyholder payments
+
+Self-serve collections use a **simulated processor** (no external PSP):
+
+- **CARD** — requires number / expiry / CVV; cards ending in `0000` are declined (`402`)
+- **ACH** — requires account name, account number, 9-digit routing; routing `000000000` is declined
+- Full PAN/account numbers are never stored; only a processor reference and masked last-4 are kept
+- Staff Finance can still record payments without instrument details
 
 ## Observability
 
@@ -104,6 +119,7 @@ insurance-platform/
 ├── services/          # five FastAPI domain services
 ├── gateway/           # auth + API proxy
 ├── frontend/          # React staff console
+├── policyholder-portal/ # Customer self-serve portal
 ├── shared/            # JWT, outbox, metrics package
 ├── db/                # multi-database init SQL
 ├── k8s/               # manifests

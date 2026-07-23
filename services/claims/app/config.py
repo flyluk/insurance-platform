@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     finance_events_url: str = "http://finance:8000/events"
+    policy_admin_url: str = "http://policy-admin:8000"
 
     db_pool_size: int = 5
     db_max_overflow: int = 8

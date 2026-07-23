@@ -115,6 +115,7 @@ services:
       JWT_SECRET: local-dev-secret-change-me
       UVICORN_WORKERS: "1"
       DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/claims_db
+      POLICY_ADMIN_URL: http://policy-admin:8000
     ports:
       - "8004:8000"
     depends_on:
@@ -122,6 +123,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      policy-admin:
+        condition: service_started
 
   finance:
     build:
@@ -191,6 +194,14 @@ services:
       context: ./product-portal
     ports:
       - "8089:80"
+    depends_on:
+      - gateway
+
+  policyholder-portal:
+    build:
+      context: ./policyholder-portal
+    ports:
+      - "8091:80"
     depends_on:
       - gateway
 

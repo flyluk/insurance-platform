@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import ClaimDisbursement, Invoice, JournalEntry, JournalLine, Payment
+from app.payments import debit_account_for, process_payment
 from app.schemas import (
     DisbursementOut,
     DomainEventIn,
@@ -19,7 +20,19 @@ from insurance_shared.auth import make_auth_dependency
 
 router = APIRouter(tags=["finance"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
-finance_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "finance", "admin")
+# Staff finance + policyholders (ownership checked in handler)
+pay_auth = make_auth_dependency(
+    settings.jwt_secret, settings.jwt_algorithm, "finance", "admin", "policyholder"
+)
+staff_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "finance", "admin")
+
+
+def _party_id(user: dict) -> str | None:
+    return user.get("party_id")
+
+
+def _is_policyholder(user: dict) -> bool:
+    return user.get("role") == "policyholder"
 
 
 def _post_journal(
@@ -50,26 +63,52 @@ def consume_event(body: DomainEventIn):
 
 
 @router.get("/api/finance/invoices", response_model=list[InvoiceOut])
-def list_invoices(db: Session = Depends(get_db), _=Depends(auth)):
-    return db.query(Invoice).order_by(Invoice.created_at.desc()).limit(200).all()
+def list_invoices(db: Session = Depends(get_db), user: dict = Depends(auth)):
+    q = db.query(Invoice)
+    if _is_policyholder(user):
+        party_id = _party_id(user)
+        if not party_id:
+            raise HTTPException(403, "Policyholder account is not linked to a party")
+        q = q.filter(Invoice.party_id == party_id)
+    return q.order_by(Invoice.created_at.desc()).limit(200).all()
 
 
 @router.get("/api/finance/invoices/{invoice_id}", response_model=InvoiceOut)
-def get_invoice(invoice_id: str, db: Session = Depends(get_db), _=Depends(auth)):
+def get_invoice(invoice_id: str, db: Session = Depends(get_db), user: dict = Depends(auth)):
     inv = db.get(Invoice, invoice_id)
     if not inv:
+        raise HTTPException(404, "Invoice not found")
+    if _is_policyholder(user) and inv.party_id != _party_id(user):
         raise HTTPException(404, "Invoice not found")
     return inv
 
 
 @router.post("/api/finance/invoices/{invoice_id}/pay", response_model=PaymentOut)
-def pay_invoice(invoice_id: str, body: PaymentCreate, db: Session = Depends(get_db), _=Depends(finance_auth)):
+def pay_invoice(
+    invoice_id: str,
+    body: PaymentCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(pay_auth),
+):
     inv = db.get(Invoice, invoice_id)
     if not inv or inv.status != "OPEN":
         raise HTTPException(400, "Invoice not payable")
+    if _is_policyholder(user):
+        if inv.party_id != _party_id(user):
+            raise HTTPException(403, "Cannot pay another party's invoice")
+        if body.method == "CASH":
+            raise HTTPException(400, "Policyholders must pay by CARD or ACH")
     if abs(body.amount - inv.amount) > 0.01:
         raise HTTPException(400, "Payment amount must match invoice")
-    payment = Payment(invoice_id=inv.id, amount=body.amount, method=body.method)
+
+    reference, masked = process_payment(body, require_instrument=_is_policyholder(user))
+    payment = Payment(
+        invoice_id=inv.id,
+        amount=body.amount,
+        method=body.method.upper(),
+        reference=reference,
+        masked_account=masked,
+    )
     db.add(payment)
     db.flush()
     inv.status = "PAID"
@@ -78,8 +117,8 @@ def pay_invoice(invoice_id: str, body: PaymentCreate, db: Session = Depends(get_
         db,
         reference_type="payment",
         reference_id=payment.id,
-        memo=f"Premium collection {inv.invoice_number}",
-        debit_account="CASH",
+        memo=f"Premium collection {inv.invoice_number} via {payment.method}",
+        debit_account=debit_account_for(payment.method),
         credit_account="AR_PREMIUM",
         amount=body.amount,
     )
@@ -89,12 +128,14 @@ def pay_invoice(invoice_id: str, body: PaymentCreate, db: Session = Depends(get_
 
 
 @router.get("/api/finance/disbursements", response_model=list[DisbursementOut])
-def list_disbursements(db: Session = Depends(get_db), _=Depends(auth)):
+def list_disbursements(db: Session = Depends(get_db), user: dict = Depends(auth)):
+    if _is_policyholder(user):
+        raise HTTPException(403, "Insufficient role")
     return db.query(ClaimDisbursement).order_by(ClaimDisbursement.created_at.desc()).limit(200).all()
 
 
 @router.get("/api/finance/ledger", response_model=list[JournalEntryOut])
-def list_ledger(db: Session = Depends(get_db), _=Depends(auth)):
+def list_ledger(db: Session = Depends(get_db), user: dict = Depends(staff_auth)):
     entries = db.query(JournalEntry).order_by(JournalEntry.created_at.desc()).limit(100).all()
     result = []
     for e in entries:

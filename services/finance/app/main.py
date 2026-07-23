@@ -13,10 +13,26 @@ from insurance_shared.metrics import PrometheusMiddleware, metrics_response
 from insurance_shared.runtime import event_runtime
 
 
+def _ensure_payment_columns() -> None:
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS reference VARCHAR(64)"))
+        conn.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS masked_account VARCHAR(32)"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     OutboxBase.metadata.create_all(bind=engine)
+    _ensure_payment_columns()
+    db = SessionLocal()
+    try:
+        from app.seed import seed_demo_invoice
+
+        seed_demo_invoice(db)
+    finally:
+        db.close()
     async with event_runtime(
         SessionLocal,
         poll_seconds=settings.outbox_poll_seconds,

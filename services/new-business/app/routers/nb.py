@@ -26,12 +26,20 @@ def create_party(body: PartyCreate, db: Session = Depends(get_db), _=Depends(age
 
 
 @router.get("/parties", response_model=list[PartyOut])
-def list_parties(db: Session = Depends(get_db), _=Depends(auth)):
+def list_parties(db: Session = Depends(get_db), user: dict = Depends(auth)):
+    if user.get("role") == "policyholder":
+        party_id = user.get("party_id")
+        if not party_id:
+            raise HTTPException(403, "Policyholder account is not linked to a party")
+        party = db.get(Party, party_id)
+        return [party] if party else []
     return db.query(Party).order_by(Party.created_at.desc()).limit(200).all()
 
 
 @router.get("/parties/{party_id}", response_model=PartyOut)
-def get_party(party_id: str, db: Session = Depends(get_db), _=Depends(auth)):
+def get_party(party_id: str, db: Session = Depends(get_db), user: dict = Depends(auth)):
+    if user.get("role") == "policyholder" and party_id != user.get("party_id"):
+        raise HTTPException(404, "Party not found")
     party = db.get(Party, party_id)
     if not party:
         raise HTTPException(404, "Party not found")
