@@ -27,6 +27,7 @@ from insurance_shared.proration import (
     term_days,
     unearned_premium,
 )
+from insurance_shared.parties import summary_from_snapshot
 
 router = APIRouter(tags=["policy-admin"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
@@ -45,12 +46,27 @@ def _require_party(user: dict) -> str:
     return party_id
 
 
+def _policy_out(policy: Policy) -> PolicyOut:
+    owner_id = policy.owner_party_id or policy.party_id
+    insured_id = policy.insured_party_id or policy.party_id
+    data = PolicyOut.model_validate(policy)
+    data.owner_party_id = owner_id
+    data.insured_party_id = insured_id
+    data.owner = summary_from_snapshot(policy.owner_snapshot, fallback_id=owner_id)
+    data.insured = summary_from_snapshot(policy.insured_snapshot, fallback_id=insured_id)
+    return data
+
+
 def _emit_bound(db: Session, policy: Policy) -> None:
     payload = {
         "policy_id": policy.id,
         "policy_number": policy.policy_number,
         "application_id": policy.application_id,
         "party_id": policy.party_id,
+        "owner_party_id": policy.owner_party_id or policy.party_id,
+        "insured_party_id": policy.insured_party_id or policy.party_id,
+        "owner": policy.owner_snapshot or {"id": policy.party_id},
+        "insured": policy.insured_snapshot or {"id": policy.insured_party_id or policy.party_id},
         "product_code": policy.product_code,
         "annual_premium": policy.annual_premium,
         "effective_date": policy.effective_date.isoformat(),
@@ -88,6 +104,10 @@ def _emit_premium_or_credit(
         "policy_id": policy.id,
         "policy_number": policy.policy_number,
         "party_id": policy.party_id,
+        "owner_party_id": policy.owner_party_id or policy.party_id,
+        "insured_party_id": policy.insured_party_id or policy.party_id,
+        "owner": policy.owner_snapshot or {"id": policy.party_id},
+        "insured": policy.insured_snapshot or {"id": policy.insured_party_id or policy.party_id},
         "product_code": policy.product_code,
         "amount": abs(round(amount, 2)),
         "invoice_type": invoice_type,
@@ -152,7 +172,7 @@ def list_policies(db: Session = Depends(get_db), user: dict = Depends(auth)):
     q = db.query(Policy)
     if _is_policyholder(user):
         q = q.filter(Policy.party_id == _require_party(user))
-    return q.order_by(Policy.created_at.desc()).limit(200).all()
+    return [_policy_out(p) for p in q.order_by(Policy.created_at.desc()).limit(200).all()]
 
 
 @router.get("/api/policies/{policy_id}", response_model=PolicyOut)
@@ -162,7 +182,7 @@ def get_policy(policy_id: str, db: Session = Depends(get_db), user: dict = Depen
         raise HTTPException(404, "Policy not found")
     if _is_policyholder(user) and policy.party_id != _require_party(user):
         raise HTTPException(404, "Policy not found")
-    return policy
+    return _policy_out(policy)
 
 
 @router.get("/api/policies/{policy_id}/cancel-preview", response_model=CancelPreviewOut)

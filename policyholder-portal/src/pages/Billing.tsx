@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import api from "../api/client";
+import { PartySummary, partyLabel } from "../components/PartyDetails";
 
 type Invoice = {
   id: string;
@@ -9,6 +10,8 @@ type Invoice = {
   status: string;
   description: string | null;
   policy_id: string | null;
+  party_id?: string;
+  owner?: PartySummary | null;
 };
 
 type Method = "CARD" | "ACH";
@@ -91,6 +94,7 @@ export default function Billing() {
           <thead>
             <tr>
               <th>Invoice</th>
+              <th>Owner</th>
               <th>Type</th>
               <th>Amount</th>
               <th>Status</th>
@@ -104,6 +108,7 @@ export default function Billing() {
                   <div>{inv.invoice_number}</div>
                   {inv.description && <div className="muted">{inv.description}</div>}
                 </td>
+                <td>{partyLabel(inv.owner, inv.party_id)}</td>
                 <td>{inv.invoice_type}</td>
                 <td>${inv.amount.toFixed(2)}</td>
                 <td>
@@ -120,7 +125,7 @@ export default function Billing() {
             ))}
             {!invoices.length && (
               <tr>
-                <td colSpan={5} className="muted">
+                <td colSpan={6} className="muted">
                   No invoices found.
                 </td>
               </tr>

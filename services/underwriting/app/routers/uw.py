@@ -8,10 +8,20 @@ from app.schemas import CaseOut, DecisionIn, DomainEventIn
 from insurance_shared.auth import make_auth_dependency
 from insurance_shared.events import enqueue_event
 from insurance_shared.metrics import record_event
+from insurance_shared.parties import summary_from_snapshot
 
 router = APIRouter(tags=["underwriting"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
 uw_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "underwriter", "admin")
+
+
+def _case_out(case: UnderwritingCase) -> CaseOut:
+    data = CaseOut.model_validate(case)
+    insured_id = case.insured_party_id or case.party_id
+    data.insured_party_id = insured_id
+    data.owner = summary_from_snapshot(case.owner_snapshot, fallback_id=case.party_id)
+    data.insured = summary_from_snapshot(case.insured_snapshot, fallback_id=insured_id)
+    return data
 
 
 def _emit_decision(db: Session, case: UnderwritingCase) -> None:
@@ -19,6 +29,10 @@ def _emit_decision(db: Session, case: UnderwritingCase) -> None:
         "application_id": case.application_id,
         "case_id": case.id,
         "party_id": case.party_id,
+        "owner_party_id": case.party_id,
+        "insured_party_id": case.insured_party_id or case.party_id,
+        "owner": case.owner_snapshot or {"id": case.party_id},
+        "insured": case.insured_snapshot or {"id": case.insured_party_id or case.party_id},
         "product_code": case.product_code,
         "annual_premium": case.annual_premium,
         "risk_attributes": case.risk_attributes or {},
@@ -48,7 +62,7 @@ def list_cases(status: str | None = None, db: Session = Depends(get_db), _=Depen
     q = db.query(UnderwritingCase).order_by(UnderwritingCase.created_at.desc())
     if status:
         q = q.filter(UnderwritingCase.status == status)
-    return q.limit(200).all()
+    return [_case_out(c) for c in q.limit(200).all()]
 
 
 @router.get("/api/uw/cases/{case_id}", response_model=CaseOut)
@@ -56,17 +70,18 @@ def get_case(case_id: str, db: Session = Depends(get_db), _=Depends(auth)):
     case = db.get(UnderwritingCase, case_id)
     if not case:
         raise HTTPException(404, "Case not found")
-    return case
+    return _case_out(case)
 
 
 @router.get("/api/uw/queue", response_model=list[CaseOut])
 def referral_queue(db: Session = Depends(get_db), _=Depends(uw_auth)):
-    return (
+    cases = (
         db.query(UnderwritingCase)
         .filter(UnderwritingCase.status == "REFERRED")
         .order_by(UnderwritingCase.created_at)
         .all()
     )
+    return [_case_out(c) for c in cases]
 
 
 @router.post("/api/uw/cases/{case_id}/decide", response_model=CaseOut)
@@ -85,4 +100,4 @@ def decide(case_id: str, body: DecisionIn, db: Session = Depends(get_db), _=Depe
     _emit_decision(db, case)
     db.commit()
     db.refresh(case)
-    return case
+    return _case_out(case)

@@ -2,12 +2,14 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../components/AuthContext";
+import PartyDetails, { PartySummary } from "../components/PartyDetails";
 
 type Policy = {
   id: string;
   policy_number: string;
   application_id: string;
   party_id: string;
+  insured_party_id?: string | null;
   product_code: string;
   status: string;
   annual_premium: number;
@@ -18,6 +20,8 @@ type Policy = {
   cancellation_refund?: number | null;
   created_at: string;
   updated_at: string;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 type Endorsement = {
@@ -273,10 +277,6 @@ export default function PolicyDetail() {
               <strong className="mono">{policy.application_id}</strong>
             </div>
             <div className="detail-row">
-              <span className="muted">Party</span>
-              <strong className="mono">{policy.party_id}</strong>
-            </div>
-            <div className="detail-row">
               <span className="muted">Product</span>
               <strong>{policy.product_code}</strong>
             </div>
@@ -309,6 +309,11 @@ export default function PolicyDetail() {
                 </strong>
               </div>
             )}
+          </div>
+          <h4>Parties</h4>
+          <div className="party-pair">
+            <PartyDetails role="Owner" party={policy.owner} />
+            <PartyDetails role="Insured" party={policy.insured} />
           </div>
           {isActive && isAdmin && (
             <div className="row">

@@ -17,6 +17,7 @@ from app.schemas import (
     PaymentOut,
 )
 from insurance_shared.auth import make_auth_dependency
+from insurance_shared.parties import summary_from_snapshot
 
 router = APIRouter(tags=["finance"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
@@ -33,6 +34,18 @@ def _party_id(user: dict) -> str | None:
 
 def _is_policyholder(user: dict) -> bool:
     return user.get("role") == "policyholder"
+
+
+def _invoice_out(inv: Invoice) -> InvoiceOut:
+    data = InvoiceOut.model_validate(inv)
+    data.owner = summary_from_snapshot(inv.owner_snapshot, fallback_id=inv.party_id)
+    return data
+
+
+def _disbursement_out(d: ClaimDisbursement) -> DisbursementOut:
+    data = DisbursementOut.model_validate(d)
+    data.owner = summary_from_snapshot(d.owner_snapshot, fallback_id=d.party_id)
+    return data
 
 
 def _post_journal(
@@ -70,7 +83,7 @@ def list_invoices(db: Session = Depends(get_db), user: dict = Depends(auth)):
         if not party_id:
             raise HTTPException(403, "Policyholder account is not linked to a party")
         q = q.filter(Invoice.party_id == party_id)
-    return q.order_by(Invoice.created_at.desc()).limit(200).all()
+    return [_invoice_out(inv) for inv in q.order_by(Invoice.created_at.desc()).limit(200).all()]
 
 
 @router.get("/api/finance/invoices/{invoice_id}", response_model=InvoiceOut)
@@ -80,7 +93,7 @@ def get_invoice(invoice_id: str, db: Session = Depends(get_db), user: dict = Dep
         raise HTTPException(404, "Invoice not found")
     if _is_policyholder(user) and inv.party_id != _party_id(user):
         raise HTTPException(404, "Invoice not found")
-    return inv
+    return _invoice_out(inv)
 
 
 @router.post("/api/finance/invoices/{invoice_id}/pay", response_model=PaymentOut)
@@ -144,7 +157,8 @@ def pay_invoice(
 def list_disbursements(db: Session = Depends(get_db), user: dict = Depends(auth)):
     if _is_policyholder(user):
         raise HTTPException(403, "Insufficient role")
-    return db.query(ClaimDisbursement).order_by(ClaimDisbursement.created_at.desc()).limit(200).all()
+    rows = db.query(ClaimDisbursement).order_by(ClaimDisbursement.created_at.desc()).limit(200).all()
+    return [_disbursement_out(d) for d in rows]
 
 
 @router.get("/api/finance/ledger", response_model=list[JournalEntryOut])

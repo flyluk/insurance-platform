@@ -3,6 +3,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from insurance_shared.parties import PartySummary
+
 
 class InvoiceOut(BaseModel):
     id: str
@@ -15,6 +17,7 @@ class InvoiceOut(BaseModel):
     description: str | None
     created_at: datetime
     paid_at: datetime | None
+    owner: PartySummary | None = None
 
     model_config = {"from_attributes": True}
 
@@ -54,6 +57,7 @@ class DisbursementOut(BaseModel):
     amount: float
     status: str
     created_at: datetime
+    owner: PartySummary | None = None
 
     model_config = {"from_attributes": True}
 

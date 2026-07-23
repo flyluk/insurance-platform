@@ -1,7 +1,16 @@
 import { FormEvent, useEffect, useState } from "react";
 import api from "../api/client";
+import PartyDetails, { PartySummary, partyLabel } from "../components/PartyDetails";
 
-type Policy = { id: string; policy_number: string; party_id: string; product_code: string; status: string };
+type Policy = {
+  id: string;
+  policy_number: string;
+  party_id: string;
+  product_code: string;
+  status: string;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
+};
 type Claim = {
   id: string;
   claim_number: string;
@@ -12,6 +21,8 @@ type Claim = {
   settlement_amount: number | null;
   description: string;
   document_count?: number;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 type ClaimDocument = {
   id: string;
@@ -150,7 +161,7 @@ export default function Claims() {
           <select value={policyId} onChange={(e) => setPolicyId(e.target.value)}>
             {policies.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.policy_number} ({p.product_code})
+                {p.policy_number} ({p.product_code}) · owner {partyLabel(p.owner, p.party_id)}
               </option>
             ))}
           </select>
@@ -173,6 +184,8 @@ export default function Claims() {
             <tr>
               <th>Claim</th>
               <th>Product</th>
+              <th>Owner</th>
+              <th>Insured</th>
               <th>Status</th>
               <th>Docs</th>
               <th>Reserve</th>
@@ -189,6 +202,8 @@ export default function Claims() {
               >
                 <td>{c.claim_number}</td>
                 <td>{c.product_code}</td>
+                <td>{partyLabel(c.owner)}</td>
+                <td>{partyLabel(c.insured)}</td>
                 <td>
                   <span className="badge">{c.status}</span>
                 </td>
@@ -232,6 +247,10 @@ export default function Claims() {
           <h3>
             Documents · {selected.claim_number}
           </h3>
+          <div className="party-pair">
+            <PartyDetails role="Owner" party={selected.owner} compact />
+            <PartyDetails role="Insured" party={selected.insured} compact />
+          </div>
           <form className="row" onSubmit={uploadDoc} style={{ alignItems: "flex-end" }}>
             <label>
               Category

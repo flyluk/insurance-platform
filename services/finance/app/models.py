@@ -2,7 +2,9 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Float, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import JSON
 
 from app.database import Base
 
@@ -17,7 +19,8 @@ class Invoice(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     invoice_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     policy_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    party_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    party_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)  # billing owner
+    owner_snapshot: Mapped[dict] = mapped_column(JSON().with_variant(JSONB(), "postgresql"), default=dict)
     invoice_type: Mapped[str] = mapped_column(String(32), nullable=False)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="OPEN")  # OPEN PAID VOID
@@ -46,6 +49,7 @@ class ClaimDisbursement(Base):
     claim_number: Mapped[str] = mapped_column(String(64), nullable=False)
     policy_id: Mapped[str] = mapped_column(String(36), nullable=False)
     party_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    owner_snapshot: Mapped[dict] = mapped_column(JSON().with_variant(JSONB(), "postgresql"), default=dict)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="PAID")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

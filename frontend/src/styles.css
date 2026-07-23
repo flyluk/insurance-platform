@@ -159,6 +159,21 @@ a.linkish { text-decoration: underline; }
   background: rgba(15, 106, 86, 0.06);
 }
 .panel h4 { margin: 0.75rem 0 0.35rem; font-size: 0.95rem; }
+.party-card {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 253, 248, 0.7);
+}
+.party-card.compact { padding: 0.55rem 0.7rem; }
+.party-role {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+.party-pair { display: grid; gap: 0.65rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 
 .login-page {
   min-height: 100vh;

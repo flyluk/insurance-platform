@@ -19,6 +19,10 @@ def _ensure_payment_columns() -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS reference VARCHAR(64)"))
         conn.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS masked_account VARCHAR(32)"))
+        conn.execute(text("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS owner_snapshot JSONB DEFAULT '{}'::jsonb"))
+        conn.execute(
+            text("ALTER TABLE claim_disbursements ADD COLUMN IF NOT EXISTS owner_snapshot JSONB DEFAULT '{}'::jsonb")
+        )
 
 
 @asynccontextmanager

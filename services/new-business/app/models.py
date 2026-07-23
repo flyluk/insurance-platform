@@ -31,7 +31,8 @@ class Quote(Base):
     __tablename__ = "quotes"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    party_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    party_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)  # policy owner
+    insured_party_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     product_code: Mapped[str] = mapped_column(String(16), nullable=False)  # AUTO HOME LIFE
     plan_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     rider_ids: Mapped[list] = mapped_column(
@@ -50,7 +51,8 @@ class Application(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     quote_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
-    party_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    party_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)  # owner
+    insured_party_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     product_code: Mapped[str] = mapped_column(String(16), nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="SUBMITTED")
     # SUBMITTED IN_UW ACCEPTED DECLINED REFERRED BOUND

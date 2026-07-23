@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from insurance_shared.parties import PartySummary
+
 DocumentCategory = Literal["PHOTO", "POLICE_REPORT", "MEDICAL", "INVOICE", "OTHER"]
 
 
@@ -28,6 +30,7 @@ class ClaimOut(BaseModel):
     claim_number: str
     policy_id: str
     party_id: str
+    insured_party_id: str | None = None
     product_code: str
     status: str
     description: str
@@ -37,6 +40,8 @@ class ClaimOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     document_count: int = 0
+    owner: PartySummary | None = None
+    insured: PartySummary | None = None
 
     model_config = {"from_attributes": True}
 

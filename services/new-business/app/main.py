@@ -23,6 +23,8 @@ def _ensure_party_columns() -> None:
         "ALTER TABLE parties ADD COLUMN IF NOT EXISTS gender VARCHAR(32)",
         "ALTER TABLE quotes ADD COLUMN IF NOT EXISTS plan_id VARCHAR(36)",
         "ALTER TABLE quotes ADD COLUMN IF NOT EXISTS rider_ids JSONB DEFAULT '[]'::jsonb",
+        "ALTER TABLE quotes ADD COLUMN IF NOT EXISTS insured_party_id VARCHAR(36)",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS insured_party_id VARCHAR(36)",
     ]
     with engine.begin() as conn:
         for stmt in statements:

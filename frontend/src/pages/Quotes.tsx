@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import api from "../api/client";
+import { PartySummary, partyLabel } from "../components/PartyDetails";
 
 type Party = {
   id: string;
@@ -15,11 +16,14 @@ type Party = {
 type Quote = {
   id: string;
   party_id: string;
+  insured_party_id?: string | null;
   product_code: string;
   plan_id?: string | null;
   rider_ids?: string[];
   status: string;
   annual_premium: number | null;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 type RiskField = {
@@ -60,6 +64,8 @@ type Application = {
   status: string;
   annual_premium: number;
   uw_decision: string | null;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 function defaultsFromSchema(schema: RiskField[]): Record<string, unknown> {
@@ -82,6 +88,7 @@ export default function Quotes() {
   const [gender, setGender] = useState("");
   const [phone, setPhone] = useState("");
   const [partyId, setPartyId] = useState("");
+  const [insuredPartyId, setInsuredPartyId] = useState("");
   const [product, setProduct] = useState("AUTO");
   const [plans, setPlans] = useState<ProductPlan[]>([]);
   const [planId, setPlanId] = useState("");
@@ -99,6 +106,7 @@ export default function Quotes() {
     setQuotes(q.data);
     setApps(a.data);
     if (!partyId && p.data[0]) setPartyId(p.data[0].id);
+    if (!insuredPartyId && p.data[0]) setInsuredPartyId(p.data[0].id);
   }
 
   useEffect(() => {
@@ -170,6 +178,7 @@ export default function Quotes() {
     }
     await api.post("/nb/quotes", {
       party_id: partyId,
+      insured_party_id: insuredPartyId || partyId,
       product_code: product,
       plan_id: planId,
       rider_ids: selectedRiders,
@@ -259,7 +268,7 @@ export default function Quotes() {
         <form className="panel stack" onSubmit={createQuote}>
           <h3>New quote</h3>
           <label>
-            Party
+            Policy owner
             <select value={partyId} onChange={(e) => setPartyId(e.target.value)} required>
               {parties.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -268,6 +277,17 @@ export default function Quotes() {
               ))}
             </select>
           </label>
+          <label>
+            Insured
+            <select value={insuredPartyId} onChange={(e) => setInsuredPartyId(e.target.value)} required>
+              {parties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.full_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="muted">Owner pays premium; insured is the covered person. They may be the same party.</p>
           <label>
             Product
             <select value={product} onChange={(e) => setProduct(e.target.value)}>
@@ -376,6 +396,8 @@ export default function Quotes() {
           <thead>
             <tr>
               <th>Product</th>
+              <th>Owner</th>
+              <th>Insured</th>
               <th>Status</th>
               <th>Premium</th>
               <th />
@@ -385,6 +407,8 @@ export default function Quotes() {
             {quotes.map((q) => (
               <tr key={q.id}>
                 <td>{q.product_code}</td>
+                <td>{partyLabel(q.owner, q.party_id)}</td>
+                <td>{partyLabel(q.insured, q.insured_party_id || q.party_id)}</td>
                 <td>
                   <span className="badge">{q.status}</span>
                 </td>
@@ -412,6 +436,8 @@ export default function Quotes() {
           <thead>
             <tr>
               <th>Product</th>
+              <th>Owner</th>
+              <th>Insured</th>
               <th>Status</th>
               <th>UW</th>
               <th>Premium</th>
@@ -421,6 +447,8 @@ export default function Quotes() {
             {apps.map((a) => (
               <tr key={a.id}>
                 <td>{a.product_code}</td>
+                <td>{partyLabel(a.owner)}</td>
+                <td>{partyLabel(a.insured)}</td>
                 <td>
                   <span className="badge">{a.status}</span>
                 </td>

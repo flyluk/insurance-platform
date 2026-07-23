@@ -53,7 +53,16 @@ docker compose up --build
 | admin@insurance.local | admin123 | admin |
 | policyholder@insurance.local | holder123 | policyholder |
 
-The policyholder account is linked to a seeded party, active AUTO policy (`AUTO-DEMO0001`), and an open premium invoice for self-serve pay and FNOL demos.
+The policyholder account is linked to seeded **owner** party Alex Rivera, a separate **insured** Jordan Lee on demo policy `AUTO-DEMO0001`, and an open premium invoice for self-serve pay and FNOL demos.
+
+### Policy owner vs insured
+
+Quotes, applications, UW cases, policies, claims, and invoices distinguish:
+
+- **Owner** (`party_id` / `owner_party_id`) — billing, auth, and portal access
+- **Insured** (`insured_party_id`) — the covered person (defaults to owner when omitted)
+
+Party name/contact snapshots travel on bind and claim open so staff and portal screens can show owner and insured details without cross-service joins.
 
 ### Product engine (plans & riders)
 

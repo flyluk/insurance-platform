@@ -12,10 +12,24 @@ from insurance_shared.metrics import PrometheusMiddleware, metrics_response
 from insurance_shared.runtime import event_runtime
 
 
+def _ensure_party_columns() -> None:
+    from sqlalchemy import text
+
+    statements = [
+        "ALTER TABLE claims ADD COLUMN IF NOT EXISTS insured_party_id VARCHAR(36)",
+        "ALTER TABLE claims ADD COLUMN IF NOT EXISTS owner_snapshot JSONB DEFAULT '{}'::jsonb",
+        "ALTER TABLE claims ADD COLUMN IF NOT EXISTS insured_snapshot JSONB DEFAULT '{}'::jsonb",
+    ]
+    with engine.begin() as conn:
+        for stmt in statements:
+            conn.execute(text(stmt))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     OutboxBase.metadata.create_all(bind=engine)
+    _ensure_party_columns()
     async with event_runtime(SessionLocal, poll_seconds=settings.outbox_poll_seconds, enable_outbox=True):
         yield
 

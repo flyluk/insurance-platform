@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
+import PartyDetails, { PartySummary } from "../components/PartyDetails";
 
 type Policy = {
   id: string;
@@ -10,6 +11,8 @@ type Policy = {
   effective_date: string;
   expiry_date: string;
   risk_attributes: Record<string, unknown>;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 export default function Policies() {
@@ -83,6 +86,10 @@ export default function Policies() {
               <p>
                 Annual premium <strong>${selected.annual_premium.toFixed(2)}</strong>
               </p>
+              <div className="party-pair">
+                <PartyDetails role="Owner" party={selected.owner} />
+                <PartyDetails role="Insured" party={selected.insured} />
+              </div>
               <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: "0.85rem", color: "var(--muted)" }}>
                 {JSON.stringify(selected.risk_attributes, null, 2)}
               </pre>

@@ -42,10 +42,12 @@ def handle_domain_event(event: dict) -> None:
 
         if event_type == "PremiumDue":
             amount = abs(float(payload["amount"]))
+            owner_snap = payload.get("owner") or {"id": payload["party_id"]}
             inv = Invoice(
                 invoice_number=f"INV-{uuid.uuid4().hex[:8].upper()}",
                 policy_id=payload.get("policy_id"),
                 party_id=payload["party_id"],
+                owner_snapshot=owner_snap if isinstance(owner_snap, dict) else {"id": payload["party_id"]},
                 invoice_type=payload.get("invoice_type") or "PREMIUM",
                 amount=amount,
                 status="OPEN",
@@ -67,10 +69,12 @@ def handle_domain_event(event: dict) -> None:
         elif event_type == "PremiumCredit":
             amount = abs(float(payload["amount"]))
             inv_type = payload.get("invoice_type") or "CREDIT"
+            owner_snap = payload.get("owner") or {"id": payload["party_id"]}
             inv = Invoice(
                 invoice_number=f"CR-{uuid.uuid4().hex[:8].upper()}",
                 policy_id=payload.get("policy_id"),
                 party_id=payload["party_id"],
+                owner_snapshot=owner_snap if isinstance(owner_snap, dict) else {"id": payload["party_id"]},
                 invoice_type=inv_type,
                 amount=amount,
                 status="OPEN",
@@ -104,11 +108,13 @@ def handle_domain_event(event: dict) -> None:
             existing = db.query(ClaimDisbursement).filter(ClaimDisbursement.claim_id == claim_id).first()
             if not existing:
                 amount = float(payload["amount"])
+                owner_snap = payload.get("owner") or {"id": payload["party_id"]}
                 disb = ClaimDisbursement(
                     claim_id=claim_id,
                     claim_number=payload["claim_number"],
                     policy_id=payload["policy_id"],
                     party_id=payload["party_id"],
+                    owner_snapshot=owner_snap if isinstance(owner_snap, dict) else {"id": payload["party_id"]},
                     amount=amount,
                     status="PAID",
                 )
