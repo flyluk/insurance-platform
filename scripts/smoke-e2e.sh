@@ -13,7 +13,7 @@ echo "Login OK"
 auth() { curl -sf -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' "$@"; }
 
 PARTY=$(auth -X POST "$BASE/api/nb/parties" \
-  -d '{"full_name":"Ada Lovelace","email":"ada@example.com"}')
+  -d '{"full_name":"Ada Lovelace","email":"ada@example.com","phone":"+1 555 0100","date_of_birth":"1815-12-10","address":"1 Analytical Engine Way","id_number":"ADA-001","gender":"female"}')
 PID=$(echo "$PARTY" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
 echo "Party $PID"
 

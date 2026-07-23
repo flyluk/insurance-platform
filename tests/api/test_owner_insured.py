@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from helpers import unique_email
+from helpers import unique_email, party_create_payload
 
 pytestmark = [pytest.mark.api]
 
@@ -12,7 +12,7 @@ def _create_party(api_client, headers, name: str) -> dict:
     resp = api_client.post(
         "/api/nb/parties",
         headers=headers,
-        json={"full_name": name, "email": unique_email(name.split()[0].lower())},
+        json=party_create_payload(name, email=unique_email(name.split()[0].lower())),
     )
     assert resp.status_code == 200, resp.text
     return resp.json()

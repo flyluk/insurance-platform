@@ -37,6 +37,21 @@ def unique_email(prefix: str = "test") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}@example.com"
 
 
+def party_create_payload(full_name: str, *, email: str | None = None, **overrides: Any) -> dict[str, Any]:
+    """Full required payload for POST /api/nb/parties."""
+    payload = {
+        "full_name": full_name,
+        "email": email or unique_email("party"),
+        "phone": "+1 555 0100",
+        "date_of_birth": "1990-01-15",
+        "address": "1 Main St",
+        "id_number": f"ID-{uuid.uuid4().hex[:8].upper()}",
+        "gender": "female",
+    }
+    payload.update(overrides)
+    return payload
+
+
 def wait_until(predicate, *, timeout: float = 30.0, interval: float = 1.0, desc: str = "condition"):
     deadline = time.time() + timeout
     last_exc: Exception | None = None
@@ -58,10 +73,7 @@ def create_auto_quote(client: httpx.Client, headers: dict[str, str]) -> tuple[di
     party = client.post(
         "/api/nb/parties",
         headers=headers,
-        json={
-            "full_name": "Test Party",
-            "email": unique_email("party"),
-        },
+        json=party_create_payload("Test Party"),
     )
     party.raise_for_status()
     party_data = party.json()

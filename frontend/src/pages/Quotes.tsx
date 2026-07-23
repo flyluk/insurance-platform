@@ -182,18 +182,27 @@ export default function Quotes() {
   }
 
   async function createNewClient() {
-    if (!name.trim()) {
-      setMsg("Name is required to create a client");
+    const missing = [
+      !name.trim() && "full name",
+      !email.trim() && "email",
+      !dob && "date of birth",
+      !address.trim() && "address",
+      !idNumber.trim() && "ID number",
+      !gender && "gender",
+      !phone.trim() && "contact number",
+    ].filter(Boolean);
+    if (missing.length) {
+      setMsg(`Create new client requires: ${missing.join(", ")}`);
       return;
     }
     const { data } = await api.post("/nb/parties", {
       full_name: name.trim(),
       email: email.trim(),
-      date_of_birth: dob || null,
-      address: address || null,
-      id_number: idNumber || null,
-      gender: gender || null,
-      phone: phone || null,
+      date_of_birth: dob,
+      address: address.trim(),
+      id_number: idNumber.trim(),
+      gender,
+      phone: phone.trim(),
     });
     setSelectedClient(data);
     setMsg(`Created client ${data.full_name}`);
@@ -263,7 +272,7 @@ export default function Quotes() {
         <form className="panel stack" onSubmit={searchClients}>
           <h3>Client search</h3>
           <p className="muted" style={{ margin: 0 }}>
-            Search existing clients by name before creating a new one.
+            Search existing clients by full name only.
           </p>
           <label>
             Full name
@@ -326,15 +335,15 @@ export default function Quotes() {
 
           <h4>Create new client</h4>
           <p className="muted" style={{ margin: 0 }}>
-            Name above is required. Email and other fields are optional. Create even if matches were found.
+            Uses the full name above. Email and all other details are required.
           </p>
           <label>
-            Email <span className="muted">(optional)</span>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+            Email
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
           </label>
           <label>
             Date of birth
-            <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" />
+            <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" required />
           </label>
           <label>
             Address
@@ -343,15 +352,21 @@ export default function Quotes() {
               onChange={(e) => setAddress(e.target.value)}
               rows={2}
               placeholder="Street, city, postal code"
+              required
             />
           </label>
           <label>
             ID number
-            <input value={idNumber} onChange={(e) => setIdNumber(e.target.value)} placeholder="National ID / passport" />
+            <input
+              value={idNumber}
+              onChange={(e) => setIdNumber(e.target.value)}
+              placeholder="National ID / passport"
+              required
+            />
           </label>
           <label>
             Gender
-            <select value={gender} onChange={(e) => setGender(e.target.value)}>
+            <select value={gender} onChange={(e) => setGender(e.target.value)} required>
               <option value="">Select…</option>
               <option value="female">Female</option>
               <option value="male">Male</option>
@@ -364,6 +379,7 @@ export default function Quotes() {
               onChange={(e) => setPhone(e.target.value)}
               type="tel"
               placeholder="+1 555 0100"
+              required
             />
           </label>
           <button className="btn warn" type="button" onClick={() => createNewClient().catch(console.error)}>

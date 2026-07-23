@@ -8,6 +8,17 @@ ProductCode = Literal["AUTO", "HOME", "LIFE"]
 
 
 class PartyCreate(BaseModel):
+    full_name: str = Field(min_length=1)
+    email: str = Field(min_length=1)
+    phone: str = Field(min_length=1)
+    date_of_birth: str = Field(min_length=1)
+    address: str = Field(min_length=1)
+    id_number: str = Field(min_length=1)
+    gender: str = Field(min_length=1)
+
+
+class PartyOut(BaseModel):
+    id: str
     full_name: str
     email: str = ""
     phone: str | None = None
@@ -15,10 +26,6 @@ class PartyCreate(BaseModel):
     address: str | None = None
     id_number: str | None = None
     gender: str | None = None
-
-
-class PartyOut(PartyCreate):
-    id: str
     created_at: datetime
 
     model_config = {"from_attributes": True}

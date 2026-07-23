@@ -1,5 +1,5 @@
 import pytest
-from helpers import create_auto_quote, unique_email
+from helpers import create_auto_quote, party_create_payload, unique_email
 
 pytestmark = [pytest.mark.api, pytest.mark.story("KAN-2")]
 
@@ -10,7 +10,7 @@ def test_create_and_list_parties(api_client, agent_headers):
     create = api_client.post(
         "/api/nb/parties",
         headers=agent_headers,
-        json={"full_name": "API Test Party", "email": email},
+        json=party_create_payload("API Test Party", email=email),
     )
     assert create.status_code == 200
     party = create.json()
@@ -23,17 +23,24 @@ def test_create_and_list_parties(api_client, agent_headers):
     assert party["id"] in ids
 
 
-def test_create_party_without_email(api_client, agent_headers):
-    """Email is optional when creating a client."""
-    create = api_client.post(
+def test_create_party_requires_all_fields(api_client, agent_headers):
+    """Create client rejects payloads missing email or other required fields."""
+    incomplete = api_client.post(
         "/api/nb/parties",
         headers=agent_headers,
-        json={"full_name": f"No Email Client {unique_email('noemail').split('@')[0]}"},
+        json={"full_name": f"Incomplete {unique_email('inc').split('@')[0]}"},
     )
-    assert create.status_code == 200, create.text
-    party = create.json()
-    assert party["id"]
-    assert party["email"] in ("", None)
+    assert incomplete.status_code == 422
+
+    email_only = api_client.post(
+        "/api/nb/parties",
+        headers=agent_headers,
+        json={
+            "full_name": "Almost Complete",
+            "email": unique_email("almost"),
+        },
+    )
+    assert email_only.status_code == 422
 
 
 def test_create_rate_quote(api_client, agent_headers):
@@ -64,7 +71,7 @@ def test_search_parties_by_name(api_client, agent_headers):
     created = api_client.post(
         "/api/nb/parties",
         headers=agent_headers,
-        json={"full_name": unique_name, "email": email, "address": "1 Main St"},
+        json=party_create_payload(unique_name, email=email, address="1 Main St"),
     )
     assert created.status_code == 200
     party_id = created.json()["id"]
@@ -75,7 +82,6 @@ def test_search_parties_by_name(api_client, agent_headers):
         ids = {p["id"] for p in hits.json()}
         assert party_id in ids
 
-        partial = api_client.get(path, headers=agent_headers, params={"name": email.split("@")[0]})
         # token from unique email fragment may not be in name — use last name token instead
         partial = api_client.get(path, headers=agent_headers, params={"name": unique_name.split()[-1]})
         assert partial.status_code == 200
