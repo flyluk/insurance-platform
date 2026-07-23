@@ -45,7 +45,7 @@ def test_list_applications(api_client, agent_headers):
 
 
 def test_search_parties_by_name(api_client, agent_headers):
-    """Client search requires name and returns matching parties."""
+    """Client search requires name and returns exact/partial matches."""
     email = unique_email("search")
     created = api_client.post(
         "/api/nb/parties",
@@ -55,17 +55,22 @@ def test_search_parties_by_name(api_client, agent_headers):
     assert created.status_code == 200
     party_id = created.json()["id"]
 
-    hits = api_client.get(
-        "/api/nb/parties/search",
-        headers=agent_headers,
-        params={"name": "Searchable"},
-    )
-    assert hits.status_code == 200
-    ids = {p["id"] for p in hits.json()}
-    assert party_id in ids
+    for path in ("/api/nb/clients/search", "/api/nb/parties/search"):
+        hits = api_client.get(path, headers=agent_headers, params={"name": "Searchable"})
+        assert hits.status_code == 200, path
+        ids = {p["id"] for p in hits.json()}
+        assert party_id in ids
+
+        partial = api_client.get(path, headers=agent_headers, params={"name": "client"})
+        assert partial.status_code == 200
+        assert party_id in {p["id"] for p in partial.json()}
+
+        exact = api_client.get(path, headers=agent_headers, params={"name": "Searchable Client"})
+        assert exact.status_code == 200
+        assert exact.json()[0]["id"] == party_id
 
     missing = api_client.get(
-        "/api/nb/parties/search",
+        "/api/nb/clients/search",
         headers=agent_headers,
         params={"name": "DefinitelyNoSuchClientXYZ"},
     )
@@ -73,7 +78,7 @@ def test_search_parties_by_name(api_client, agent_headers):
     assert missing.json() == []
 
     bad = api_client.get(
-        "/api/nb/parties/search",
+        "/api/nb/clients/search",
         headers=agent_headers,
         params={"name": ""},
     )

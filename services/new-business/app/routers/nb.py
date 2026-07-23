@@ -63,6 +63,34 @@ def create_party(body: PartyCreate, db: Session = Depends(get_db), _=Depends(age
     return party
 
 
+def _search_parties_by_name(db: Session, name: str) -> list[Party]:
+    """Exact / partial case-insensitive name match, ranked best-first."""
+    name_q = " ".join((name or "").split())
+    if not name_q:
+        raise HTTPException(400, "Name is required for client search")
+
+    tokens = [t for t in name_q.split(" ") if t]
+    q = db.query(Party)
+    for token in tokens:
+        q = q.filter(Party.full_name.ilike(f"%{token}%"))
+
+    rows = q.limit(100).all()
+    needle = name_q.casefold()
+
+    def rank(party: Party) -> tuple[int, str]:
+        full = (party.full_name or "").casefold()
+        if full == needle:
+            return (0, full)
+        if full.startswith(needle):
+            return (1, full)
+        if needle in full:
+            return (2, full)
+        return (3, full)
+
+    rows.sort(key=rank)
+    return rows[:50]
+
+
 @router.get("/parties", response_model=list[PartyOut])
 def list_parties(db: Session = Depends(get_db), user: dict = Depends(auth)):
     if user.get("role") == "policyholder":
@@ -82,55 +110,19 @@ def list_parties(db: Session = Depends(get_db), user: dict = Depends(auth)):
 
 
 @router.get("/clients/search", response_model=list[PartyOut])
-def search_clients(
-    name: str,
-    db: Session = Depends(get_db),
-    _=Depends(agent_auth),
-):
+def search_clients(name: str, db: Session = Depends(get_db), _=Depends(agent_auth)):
     """Find existing clients by exact or partial name match (case-insensitive)."""
-    name_q = " ".join((name or "").split())
-    if not name_q:
-        raise HTTPException(400, "Name is required for client search")
-
-    tokens = [t for t in name_q.split(" ") if t]
-    q = db.query(Party)
-    # Every token must appear somewhere in the full name (partial match)
-    for token in tokens:
-        q = q.filter(Party.full_name.ilike(f"%{token}%"))
-
-    rows = q.order_by(Party.full_name).limit(100).all()
-
-    # Rank: exact (case-insensitive) first, then starts-with, then other partials
-    needle = name_q.casefold()
-
-    def rank(party: Party) -> tuple[int, str]:
-        full = (party.full_name or "").casefold()
-        if full == needle:
-            return (0, full)
-        if full.startswith(needle):
-            return (1, full)
-        if needle in full:
-            return (2, full)
-        return (3, full)
-
-    rows.sort(key=rank)
-    return rows[:50]
+    return _search_parties_by_name(db, name)
 
 
-# Keep legacy path working; declared before /parties/{party_id}
 @router.get("/parties/search", response_model=list[PartyOut])
-def search_parties_legacy(
-    name: str,
-    db: Session = Depends(get_db),
-    _=Depends(agent_auth),
-):
-    return search_clients(name=name, db=db, _=_)
+def search_parties(name: str, db: Session = Depends(get_db), _=Depends(agent_auth)):
+    """Legacy alias — prefer /clients/search to avoid clashing with /parties/{id}."""
+    return _search_parties_by_name(db, name)
 
 
 @router.get("/parties/{party_id}", response_model=PartyOut)
 def get_party(party_id: str, db: Session = Depends(get_db), user: dict = Depends(auth)):
-    if party_id in {"search", "clients"}:
-        raise HTTPException(404, "Party not found")
     if user.get("role") == "policyholder":
         own = user.get("party_id")
         if not own or not _policyholder_can_view_party(db, own, party_id):

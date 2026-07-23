@@ -167,13 +167,16 @@ export default function Quotes() {
     setSearchBusy(true);
     setMsg("");
     try {
-      const { data } = await api.get("/nb/parties/search", {
+      const { data } = await api.get("/nb/clients/search", {
         params: { name: name.trim() },
       });
-      setSearchHits(data);
+      const hits = Array.isArray(data) ? data : [];
+      setSearchHits(hits);
       setSearched(true);
-      if (!data.length) {
+      if (!hits.length) {
         setMsg("No matching clients — you can force create a new one");
+      } else {
+        setMsg(`Found ${hits.length} client${hits.length === 1 ? "" : "s"}`);
       }
     } catch (err: unknown) {
       const detail =
