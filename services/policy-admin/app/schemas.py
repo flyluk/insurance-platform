@@ -15,6 +15,8 @@ class PolicyOut(BaseModel):
     risk_attributes: dict[str, Any]
     effective_date: datetime
     expiry_date: datetime
+    cancelled_at: datetime | None = None
+    cancellation_refund: float | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -24,6 +26,9 @@ class PolicyOut(BaseModel):
 class EndorsementCreate(BaseModel):
     endorsement_type: str = "GENERAL"
     description: str | None = None
+    # When True (default), recompute annual premium from risk + published rates.
+    re_rate: bool = True
+    # Used only when re_rate is False (manual override).
     premium_delta: float = 0.0
     risk_attributes: dict[str, Any] | None = None
 
@@ -34,9 +39,34 @@ class EndorsementOut(BaseModel):
     endorsement_type: str
     description: str | None
     premium_delta: float
+    billed_amount: float = 0.0
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class CancelPreviewOut(BaseModel):
+    policy_id: str
+    annual_premium: float
+    term_days: int
+    remaining_days: int
+    remaining_fraction: float
+    unearned_premium: float
+
+
+class EndorsePreviewIn(BaseModel):
+    risk_attributes: dict[str, Any] | None = None
+    re_rate: bool = True
+    premium_delta: float = 0.0
+
+
+class EndorsePreviewOut(BaseModel):
+    policy_id: str
+    current_annual: float
+    new_annual: float
+    annual_delta: float
+    remaining_fraction: float
+    billed_amount: float
 
 
 class DomainEventIn(BaseModel):

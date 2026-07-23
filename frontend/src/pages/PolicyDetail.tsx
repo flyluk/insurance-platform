@@ -14,6 +14,8 @@ type Policy = {
   risk_attributes: Record<string, unknown>;
   effective_date: string;
   expiry_date: string;
+  cancelled_at?: string | null;
+  cancellation_refund?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -23,6 +25,7 @@ type Endorsement = {
   endorsement_type: string;
   description: string | null;
   premium_delta: number;
+  billed_amount?: number;
   created_at: string;
 };
 
@@ -91,6 +94,19 @@ export default function PolicyDetail() {
   const [changeType, setChangeType] = useState("POLICY_CHANGE");
   const [changeDesc, setChangeDesc] = useState("");
   const [premiumDelta, setPremiumDelta] = useState(0);
+  const [reRate, setReRate] = useState(true);
+  const [preview, setPreview] = useState<{
+    current_annual: number;
+    new_annual: number;
+    annual_delta: number;
+    billed_amount: number;
+    remaining_fraction: number;
+  } | null>(null);
+  const [cancelPreview, setCancelPreview] = useState<{
+    unearned_premium: number;
+    remaining_days: number;
+    remaining_fraction: number;
+  } | null>(null);
   const [riskDraft, setRiskDraft] = useState<Record<string, unknown>>({});
   const [showChange, setShowChange] = useState(false);
   const changeFormRef = useRef<HTMLFormElement>(null);
@@ -146,18 +162,51 @@ export default function PolicyDetail() {
     await refresh();
   }
 
+  async function loadCancelPreview() {
+    if (!id) return;
+    const { data } = await api.get(`/policies/${id}/cancel-preview`);
+    setCancelPreview(data);
+  }
+
   async function cancel() {
     if (!id) return;
-    await api.post(`/policies/${id}/cancel`);
-    setMsg("Policy cancelled");
+    let previewText = "";
+    try {
+      const { data } = await api.get(`/policies/${id}/cancel-preview`);
+      previewText = ` Unearned premium refund: $${data.unearned_premium.toFixed(2)} (${data.remaining_days} days remaining).`;
+    } catch {
+      /* preview optional */
+    }
+    if (!window.confirm(`Cancel this policy?${previewText}`)) return;
+    const { data } = await api.post(`/policies/${id}/cancel`);
+    setMsg(
+      `Policy cancelled` +
+        (data.cancellation_refund != null
+          ? ` · refund credit $${Number(data.cancellation_refund).toFixed(2)}`
+          : ""),
+    );
     setShowChange(false);
+    setCancelPreview(null);
     await refresh();
   }
 
   function openChangeForm() {
     if (policy) setRiskDraft({ ...(policy.risk_attributes || {}) });
+    setReRate(true);
+    setPremiumDelta(0);
+    setPreview(null);
     setShowChange(true);
     setTimeout(() => changeFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  async function calculateEndorse() {
+    if (!id) return;
+    const { data } = await api.post(`/policies/${id}/endorse-preview`, {
+      risk_attributes: riskDraft,
+      re_rate: reRate,
+      premium_delta: premiumDelta,
+    });
+    setPreview(data);
   }
 
   async function submitChange(e: FormEvent) {
@@ -166,12 +215,14 @@ export default function PolicyDetail() {
     await api.post(`/policies/${id}/endorse`, {
       endorsement_type: changeType,
       description: changeDesc || "Policy change",
+      re_rate: reRate,
       premium_delta: premiumDelta,
       risk_attributes: riskDraft,
     });
-    setMsg("Policy change applied");
+    setMsg("Policy change applied (re-rated / prorated)");
     setChangeDesc("");
     setPremiumDelta(0);
+    setPreview(null);
     setShowChange(false);
     await refresh();
   }
@@ -247,6 +298,17 @@ export default function PolicyDetail() {
               <span className="muted">Updated</span>
               <strong>{policy.updated_at.slice(0, 19).replace("T", " ")}</strong>
             </div>
+            {policy.cancelled_at && (
+              <div className="detail-row">
+                <span className="muted">Cancelled</span>
+                <strong>
+                  {policy.cancelled_at.slice(0, 19).replace("T", " ")}
+                  {policy.cancellation_refund != null
+                    ? ` · refund $${Number(policy.cancellation_refund).toFixed(2)}`
+                    : ""}
+                </strong>
+              </div>
+            )}
           </div>
           {isActive && isAdmin && (
             <div className="row">
@@ -287,15 +349,21 @@ export default function PolicyDetail() {
               placeholder="What is changing?"
             />
           </label>
-          <label>
-            Premium delta ($)
-            <input
-              type="number"
-              step="1"
-              value={premiumDelta}
-              onChange={(e) => setPremiumDelta(Number(e.target.value))}
-            />
+          <label className="checkbox-row" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <input type="checkbox" checked={reRate} onChange={(e) => setReRate(e.target.checked)} />
+            Re-rate from risk attributes (recommended)
           </label>
+          {!reRate && (
+            <label>
+              Manual annual premium delta ($)
+              <input
+                type="number"
+                step="1"
+                value={premiumDelta}
+                onChange={(e) => setPremiumDelta(Number(e.target.value))}
+              />
+            </label>
+          )}
 
           {riskSchema.length > 0 && (
             <>
@@ -361,7 +429,39 @@ export default function PolicyDetail() {
             </>
           )}
 
+          {preview && (
+            <div className="panel" style={{ boxShadow: "none" }}>
+              <div className="detail-grid">
+                <div className="detail-row">
+                  <span className="muted">Current annual</span>
+                  <strong>${preview.current_annual.toFixed(2)}</strong>
+                </div>
+                <div className="detail-row">
+                  <span className="muted">New annual</span>
+                  <strong>${preview.new_annual.toFixed(2)}</strong>
+                </div>
+                <div className="detail-row">
+                  <span className="muted">Annual Δ</span>
+                  <strong>
+                    {preview.annual_delta >= 0 ? "+" : ""}
+                    {preview.annual_delta.toFixed(2)}
+                  </strong>
+                </div>
+                <div className="detail-row">
+                  <span className="muted">Mid-term bill / credit</span>
+                  <strong>
+                    {preview.billed_amount >= 0 ? "+" : ""}
+                    {preview.billed_amount.toFixed(2)} ({(preview.remaining_fraction * 100).toFixed(1)}% term left)
+                  </strong>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="row">
+            <button className="btn ghost" type="button" onClick={() => calculateEndorse().catch(console.error)}>
+              Calculate premium
+            </button>
             <button className="btn" type="submit">
               Apply policy change
             </button>
@@ -375,9 +475,19 @@ export default function PolicyDetail() {
       {isActive && (
         <div className="panel stack">
           <h3>Actions</h3>
+          {cancelPreview && (
+            <p className="muted" style={{ margin: 0 }}>
+              Cancel preview: unearned refund ${cancelPreview.unearned_premium.toFixed(2)} ·{" "}
+              {cancelPreview.remaining_days} days remaining (
+              {(cancelPreview.remaining_fraction * 100).toFixed(1)}%)
+            </p>
+          )}
           <div className="row">
             <button className="btn" type="button" onClick={renew}>
               Renew
+            </button>
+            <button className="btn ghost" type="button" onClick={() => loadCancelPreview().catch(console.error)}>
+              Preview cancel
             </button>
             <button className="btn danger" type="button" onClick={cancel}>
               Cancel policy
@@ -393,7 +503,8 @@ export default function PolicyDetail() {
             <tr>
               <th>Type</th>
               <th>Description</th>
-              <th>Premium Δ</th>
+              <th>Annual Δ</th>
+              <th>Billed</th>
               <th>Date</th>
             </tr>
           </thead>
@@ -403,12 +514,17 @@ export default function PolicyDetail() {
                 <td>{e.endorsement_type}</td>
                 <td>{e.description || "—"}</td>
                 <td>{e.premium_delta >= 0 ? `+${e.premium_delta}` : e.premium_delta}</td>
+                <td>
+                  {e.billed_amount != null
+                    ? `${e.billed_amount >= 0 ? "+" : ""}${e.billed_amount}`
+                    : "—"}
+                </td>
                 <td className="muted">{e.created_at.slice(0, 19).replace("T", " ")}</td>
               </tr>
             ))}
             {!endorsements.length && (
               <tr>
-                <td colSpan={4} className="muted">
+                <td colSpan={5} className="muted">
                   No endorsements yet
                 </td>
               </tr>

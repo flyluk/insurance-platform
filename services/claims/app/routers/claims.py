@@ -105,16 +105,18 @@ def open_claim(
     db: Session = Depends(get_db),
     user: dict = Depends(open_auth),
 ):
-    party_id = body.party_id
-    product_code = body.product_code
+    auth_header = request.headers.get("authorization")
+    policy = _fetch_policy(body.policy_id, auth_header)
+    if policy.get("status") != "ACTIVE":
+        raise HTTPException(400, "Policy must be ACTIVE to open a claim")
+
+    party_id = policy.get("party_id") or body.party_id
+    product_code = policy.get("product_code") or body.product_code
     if _is_policyholder(user):
-        party_id = _require_party(user)
-        policy = _fetch_policy(body.policy_id, request.headers.get("authorization"))
-        if policy.get("party_id") != party_id:
+        linked = _require_party(user)
+        if policy.get("party_id") != linked:
             raise HTTPException(403, "Cannot open a claim on another party's policy")
-        if policy.get("status") != "ACTIVE":
-            raise HTTPException(400, "Policy must be ACTIVE to open a claim")
-        product_code = policy.get("product_code") or product_code
+        party_id = linked
 
     claim = Claim(
         claim_number=f"CLM-{uuid.uuid4().hex[:8].upper()}",

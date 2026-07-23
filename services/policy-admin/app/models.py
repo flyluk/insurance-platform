@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Float, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -26,6 +26,8 @@ class Policy(Base):
     risk_attributes: Mapped[dict] = mapped_column(JSON().with_variant(JSONB(), "postgresql"), default=dict)
     effective_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expiry_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancellation_refund: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -37,5 +39,6 @@ class Endorsement(Base):
     policy_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     endorsement_type: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    premium_delta: Mapped[float] = mapped_column(Float, default=0.0)
+    premium_delta: Mapped[float] = mapped_column(Float, default=0.0)  # change to annual premium
+    billed_amount: Mapped[float] = mapped_column(Float, default=0.0)  # mid-term prorated bill/credit
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

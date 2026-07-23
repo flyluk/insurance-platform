@@ -1,15 +1,33 @@
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models import ClaimDisbursement, Invoice, JournalEntry, JournalLine
+from app.models import ClaimDisbursement, Invoice
 from app.routers.finance import _post_journal
 from insurance_shared.events import already_processed, mark_processed
 from insurance_shared.metrics import record_event
 
-HANDLED_TYPES = {"PremiumDue", "ClaimPaymentRequested"}
+HANDLED_TYPES = {"PremiumDue", "PremiumCredit", "PolicyCancelled", "ClaimPaymentRequested"}
+
+
+def _void_open_invoices(db: Session, policy_id: str | None) -> int:
+    if not policy_id:
+        return 0
+    open_rows = (
+        db.query(Invoice)
+        .filter(
+            Invoice.policy_id == policy_id,
+            Invoice.status == "OPEN",
+            Invoice.invoice_type.in_(("PREMIUM", "ENDORSEMENT", "RENEWAL")),
+        )
+        .all()
+    )
+    for inv in open_rows:
+        inv.status = "VOID"
+    return len(open_rows)
 
 
 def handle_domain_event(event: dict) -> None:
@@ -23,7 +41,7 @@ def handle_domain_event(event: dict) -> None:
             return
 
         if event_type == "PremiumDue":
-            amount = float(payload["amount"])
+            amount = abs(float(payload["amount"]))
             inv = Invoice(
                 invoice_number=f"INV-{uuid.uuid4().hex[:8].upper()}",
                 policy_id=payload.get("policy_id"),
@@ -45,6 +63,41 @@ def handle_domain_event(event: dict) -> None:
                 amount=amount,
             )
             record_event("PremiumDue", "consumed", settings.service_name)
+
+        elif event_type == "PremiumCredit":
+            amount = abs(float(payload["amount"]))
+            inv_type = payload.get("invoice_type") or "CREDIT"
+            inv = Invoice(
+                invoice_number=f"CR-{uuid.uuid4().hex[:8].upper()}",
+                policy_id=payload.get("policy_id"),
+                party_id=payload["party_id"],
+                invoice_type=inv_type,
+                amount=amount,
+                status="OPEN",
+                description=(
+                    f"Premium credit for policy {payload.get('policy_number')}"
+                    + (f" ({inv_type})" if inv_type else "")
+                ),
+            )
+            db.add(inv)
+            db.flush()
+            _post_journal(
+                db,
+                reference_type="credit",
+                reference_id=inv.id,
+                memo=f"Premium credit {inv.invoice_number}",
+                debit_account="PREMIUM_REVENUE",
+                credit_account="PREMIUM_PAYABLE",
+                amount=amount,
+            )
+            record_event("PremiumCredit", "consumed", settings.service_name)
+
+        elif event_type == "PolicyCancelled":
+            voided = _void_open_invoices(db, payload.get("policy_id"))
+            record_event("PolicyCancelled", "consumed", settings.service_name)
+            if voided:
+                # Keep a breadcrumb on the invoice descriptions when voided.
+                pass
 
         elif event_type == "ClaimPaymentRequested":
             claim_id = payload["claim_id"]
