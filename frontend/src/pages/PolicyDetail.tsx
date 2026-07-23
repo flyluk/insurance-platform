@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../components/AuthContext";
 import PartyDetails, { PartySummary } from "../components/PartyDetails";
+import { flattenRiskEntries } from "../utils/formatRisk";
 
 type Policy = {
   id: string;
@@ -56,10 +57,10 @@ const CHANGE_TYPES = [
 
 function formatRisk(attrs: Record<string, unknown> | null | undefined) {
   if (!attrs || !Object.keys(attrs).length) return null;
-  return Object.entries(attrs).map(([key, value]) => (
-    <div key={key} className="detail-row">
-      <span className="muted">{key.replace(/_/g, " ")}</span>
-      <strong>{String(value)}</strong>
+  return flattenRiskEntries(attrs).map((row) => (
+    <div key={row.key} className="detail-row">
+      <span className="muted">{row.label}</span>
+      <strong className="risk-value">{row.value}</strong>
     </div>
   ));
 }
