@@ -77,7 +77,6 @@ function defaultsFromSchema(schema: RiskField[]): Record<string, unknown> {
 }
 
 export default function Quotes() {
-  const [parties, setParties] = useState<Party[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [apps, setApps] = useState<Application[]>([]);
   const [name, setName] = useState("");
@@ -90,8 +89,7 @@ export default function Quotes() {
   const [searchHits, setSearchHits] = useState<Party[]>([]);
   const [searched, setSearched] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
-  const [partyId, setPartyId] = useState("");
-  const [insuredPartyId, setInsuredPartyId] = useState("");
+  const [selectedClient, setSelectedClient] = useState<Party | null>(null);
   const [product, setProduct] = useState("AUTO");
   const [plans, setPlans] = useState<ProductPlan[]>([]);
   const [planId, setPlanId] = useState("");
@@ -100,16 +98,12 @@ export default function Quotes() {
   const [msg, setMsg] = useState("");
 
   async function refresh() {
-    const [p, q, a] = await Promise.all([
-      api.get("/nb/parties"),
+    const [q, a] = await Promise.all([
       api.get("/nb/quotes"),
       api.get("/nb/applications"),
     ]);
-    setParties(p.data);
     setQuotes(q.data);
     setApps(a.data);
-    if (!partyId && p.data[0]) setPartyId(p.data[0].id);
-    if (!insuredPartyId && p.data[0]) setInsuredPartyId(p.data[0].id);
   }
 
   useEffect(() => {
@@ -153,8 +147,7 @@ export default function Quotes() {
   }, [planId]);
 
   function selectExisting(party: Party) {
-    setPartyId(party.id);
-    setInsuredPartyId(party.id);
+    setSelectedClient(party);
     setMsg(`Using existing client ${party.full_name}`);
   }
 
@@ -174,7 +167,7 @@ export default function Quotes() {
       setSearchHits(hits);
       setSearched(true);
       if (!hits.length) {
-        setMsg("No matching clients — you can force create a new one");
+        setMsg("No matching clients — create a new one below");
       } else {
         setMsg(`Found ${hits.length} client${hits.length === 1 ? "" : "s"}`);
       }
@@ -188,9 +181,9 @@ export default function Quotes() {
     }
   }
 
-  async function forceCreateParty() {
-    if (!name.trim() || !email.trim()) {
-      setMsg("Name and email are required to create a client");
+  async function createNewClient() {
+    if (!name.trim()) {
+      setMsg("Name is required to create a client");
       return;
     }
     const { data } = await api.post("/nb/parties", {
@@ -202,8 +195,7 @@ export default function Quotes() {
       gender: gender || null,
       phone: phone || null,
     });
-    setPartyId(data.id);
-    setInsuredPartyId(data.id);
+    setSelectedClient(data);
     setMsg(`Created client ${data.full_name}`);
     setSearchHits([]);
     setSearched(false);
@@ -219,13 +211,17 @@ export default function Quotes() {
 
   async function createQuote(e: FormEvent) {
     e.preventDefault();
+    if (!selectedClient) {
+      setMsg("Select a matched client or create a new client first");
+      return;
+    }
     if (!planId) {
       setMsg("Select a published basic plan");
       return;
     }
     await api.post("/nb/quotes", {
-      party_id: partyId,
-      insured_party_id: insuredPartyId || partyId,
+      party_id: selectedClient.id,
+      insured_party_id: selectedClient.id,
       product_code: product,
       plan_id: planId,
       rider_ids: selectedRiders,
@@ -299,7 +295,7 @@ export default function Quotes() {
                       <div className="party-fields">
                         <div className="party-field">
                           <span className="party-field-label">Email</span>
-                          <span className="party-field-value">{p.email}</span>
+                          <span className="party-field-value">{p.email || "—"}</span>
                         </div>
                         <div className="party-field">
                           <span className="party-field-label">DOB</span>
@@ -330,11 +326,11 @@ export default function Quotes() {
 
           <h4>Create new client</h4>
           <p className="muted" style={{ margin: 0 }}>
-            Optional details for a new record. Use Force create even if matches were found.
+            Name above is required. Email and other fields are optional. Create even if matches were found.
           </p>
           <label>
-            Email
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+            Email <span className="muted">(optional)</span>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
           </label>
           <label>
             Date of birth
@@ -370,33 +366,40 @@ export default function Quotes() {
               placeholder="+1 555 0100"
             />
           </label>
-          <button className="btn warn" type="button" onClick={() => forceCreateParty().catch(console.error)}>
-            Force create
+          <button className="btn warn" type="button" onClick={() => createNewClient().catch(console.error)}>
+            Create new client
           </button>
         </form>
         <form className="panel stack" onSubmit={createQuote}>
           <h3>New quote</h3>
-          <label>
-            Policy owner
-            <select value={partyId} onChange={(e) => setPartyId(e.target.value)} required>
-              {parties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.full_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Insured
-            <select value={insuredPartyId} onChange={(e) => setInsuredPartyId(e.target.value)} required>
-              {parties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.full_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p className="muted">Owner pays premium; insured is the covered person. They may be the same party.</p>
+          {selectedClient ? (
+            <div className="party-card compact">
+              <div className="party-name">{selectedClient.full_name}</div>
+              <div className="party-fields">
+                <div className="party-field">
+                  <span className="party-field-label">Email</span>
+                  <span className="party-field-value">{selectedClient.email || "—"}</span>
+                </div>
+                <div className="party-field">
+                  <span className="party-field-label">DOB</span>
+                  <span className="party-field-value">{selectedClient.date_of_birth || "—"}</span>
+                </div>
+                <div className="party-field">
+                  <span className="party-field-label">Address</span>
+                  <span className="party-field-value">{selectedClient.address || "—"}</span>
+                </div>
+              </div>
+              <div className="row" style={{ marginTop: "0.5rem" }}>
+                <button className="btn ghost" type="button" onClick={() => setSelectedClient(null)}>
+                  Clear client
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>
+              Choose a matched client or create a new client first.
+            </p>
+          )}
           <label>
             Product
             <select value={product} onChange={(e) => setProduct(e.target.value)}>
@@ -494,7 +497,7 @@ export default function Quotes() {
             );
           })}
 
-          <button className="btn" type="submit">
+          <button className="btn" type="submit" disabled={!selectedClient}>
             Create quote
           </button>
         </form>

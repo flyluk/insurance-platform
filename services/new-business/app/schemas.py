@@ -9,7 +9,7 @@ ProductCode = Literal["AUTO", "HOME", "LIFE"]
 
 class PartyCreate(BaseModel):
     full_name: str
-    email: str
+    email: str = ""
     phone: str | None = None
     date_of_birth: str | None = None
     address: str | None = None
