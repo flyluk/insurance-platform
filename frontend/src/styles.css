@@ -212,6 +212,20 @@ a.linkish { text-decoration: underline; }
 .party-cell { display: grid; gap: 0.15rem; min-width: 9rem; max-width: 16rem; }
 .party-cell strong { font-weight: 600; }
 .party-cell .muted { overflow-wrap: anywhere; font-size: 0.8rem; }
+.client-match-scroll {
+  display: grid;
+  gap: 0.65rem;
+  max-height: min(28rem, 55vh);
+  overflow-y: auto;
+  padding: 0.35rem 0.4rem 0.35rem 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 253, 248, 0.55);
+  scrollbar-gutter: stable;
+}
+.client-match-scroll .party-card {
+  margin: 0 0.35rem;
+}
 
 .login-page {
   min-height: 100vh;

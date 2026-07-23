@@ -287,38 +287,44 @@ export default function Quotes() {
 
           {searched && (
             <div className="stack">
-              <h4>Matches</h4>
+              <h4 style={{ margin: 0 }}>
+                Matches{searchHits.length ? ` (${searchHits.length})` : ""}
+              </h4>
               {searchHits.length === 0 && <p className="muted">No existing clients matched.</p>}
-              {searchHits.map((p) => (
-                <div key={p.id} className="party-card">
-                  <div className="party-name">{p.full_name}</div>
-                  <div className="party-fields">
-                    <div className="party-field">
-                      <span className="party-field-label">Email</span>
-                      <span className="party-field-value">{p.email}</span>
-                    </div>
-                    <div className="party-field">
-                      <span className="party-field-label">DOB</span>
-                      <span className="party-field-value">{p.date_of_birth || "—"}</span>
-                    </div>
-                    <div className="party-field">
-                      <span className="party-field-label">Address</span>
-                      <span className="party-field-value">{p.address || "—"}</span>
-                    </div>
-                    {p.phone && (
-                      <div className="party-field">
-                        <span className="party-field-label">Phone</span>
-                        <span className="party-field-value">{p.phone}</span>
+              {searchHits.length > 0 && (
+                <div className="client-match-scroll">
+                  {searchHits.map((p) => (
+                    <div key={p.id} className="party-card">
+                      <div className="party-name">{p.full_name}</div>
+                      <div className="party-fields">
+                        <div className="party-field">
+                          <span className="party-field-label">Email</span>
+                          <span className="party-field-value">{p.email}</span>
+                        </div>
+                        <div className="party-field">
+                          <span className="party-field-label">DOB</span>
+                          <span className="party-field-value">{p.date_of_birth || "—"}</span>
+                        </div>
+                        <div className="party-field">
+                          <span className="party-field-label">Address</span>
+                          <span className="party-field-value">{p.address || "—"}</span>
+                        </div>
+                        {p.phone && (
+                          <div className="party-field">
+                            <span className="party-field-label">Phone</span>
+                            <span className="party-field-value">{p.phone}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className="row" style={{ marginTop: "0.65rem" }}>
-                    <button className="btn" type="button" onClick={() => selectExisting(p)}>
-                      Use existing client
-                    </button>
-                  </div>
+                      <div className="row" style={{ marginTop: "0.65rem" }}>
+                        <button className="btn" type="button" onClick={() => selectExisting(p)}>
+                          Use existing client
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
 
