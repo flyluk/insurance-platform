@@ -261,6 +261,11 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: UVICORN_WORKERS
+            - name: PRODUCT_ENGINE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: PRODUCT_ENGINE_URL
           readinessProbe:
             httpGet:
               path: /health

@@ -98,6 +98,7 @@ services:
       JWT_SECRET: local-dev-secret-change-me
       UVICORN_WORKERS: "1"
       DATABASE_URL: postgresql://insurance:insurancepass@postgres:5432/policy_db
+      PRODUCT_ENGINE_URL: http://product-engine:8000
     ports:
       - "8003:8000"
     depends_on:
@@ -105,6 +106,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      product-engine:
+        condition: service_started
 
   claims:
     build:

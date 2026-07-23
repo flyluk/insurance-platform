@@ -1,5 +1,5 @@
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -7,10 +7,26 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import Endorsement, Policy
-from app.schemas import DomainEventIn, EndorsementCreate, EndorsementOut, PolicyOut
+from app.rating_client import RatingError, rate_policy_premium
+from app.schemas import (
+    CancelPreviewOut,
+    DomainEventIn,
+    EndorsePreviewIn,
+    EndorsePreviewOut,
+    EndorsementCreate,
+    EndorsementOut,
+    PolicyOut,
+)
 from insurance_shared.auth import make_auth_dependency
 from insurance_shared.events import enqueue_event
 from insurance_shared.metrics import record_event
+from insurance_shared.proration import (
+    prorate_delta,
+    remaining_days,
+    remaining_fraction,
+    term_days,
+    unearned_premium,
+)
 
 router = APIRouter(tags=["policy-admin"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
@@ -27,10 +43,6 @@ def _require_party(user: dict) -> str:
     if not party_id:
         raise HTTPException(403, "Policyholder account is not linked to a party")
     return party_id
-
-
-def _policy_number(product_code: str) -> str:
-    return f"{product_code}-{uuid.uuid4().hex[:8].upper()}"
 
 
 def _emit_bound(db: Session, policy: Policy) -> None:
@@ -62,6 +74,71 @@ def _emit_bound(db: Session, policy: Policy) -> None:
     record_event("PremiumDue", "produced", settings.service_name)
 
 
+def _emit_premium_or_credit(
+    db: Session,
+    policy: Policy,
+    *,
+    amount: float,
+    invoice_type: str,
+    extra: dict | None = None,
+) -> None:
+    if abs(amount) < 0.01:
+        return
+    payload = {
+        "policy_id": policy.id,
+        "policy_number": policy.policy_number,
+        "party_id": policy.party_id,
+        "product_code": policy.product_code,
+        "amount": abs(round(amount, 2)),
+        "invoice_type": invoice_type,
+        **(extra or {}),
+    }
+    if amount > 0:
+        enqueue_event(
+            db,
+            event_type="PremiumDue",
+            aggregate_type="policy",
+            aggregate_id=policy.id,
+            payload=payload,
+        )
+        record_event("PremiumDue", "produced", settings.service_name)
+    else:
+        enqueue_event(
+            db,
+            event_type="PremiumCredit",
+            aggregate_type="policy",
+            aggregate_id=policy.id,
+            payload=payload,
+        )
+        record_event("PremiumCredit", "produced", settings.service_name)
+
+
+def _compute_endorse(
+    policy: Policy,
+    body: EndorsementCreate | EndorsePreviewIn,
+) -> tuple[dict, float, float, float]:
+    merged = dict(policy.risk_attributes or {})
+    if body.risk_attributes:
+        merged.update(body.risk_attributes)
+        # Preserve nested product_selection unless explicitly replaced
+        if "product_selection" not in (body.risk_attributes or {}) and policy.risk_attributes:
+            if "product_selection" in (policy.risk_attributes or {}):
+                merged["product_selection"] = policy.risk_attributes["product_selection"]
+
+    if body.re_rate:
+        try:
+            new_annual = rate_policy_premium(policy.product_code, merged)
+        except RatingError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        annual_delta = round(new_annual - policy.annual_premium, 2)
+    else:
+        annual_delta = round(float(body.premium_delta), 2)
+        new_annual = round(policy.annual_premium + annual_delta, 2)
+
+    billed = prorate_delta(annual_delta, policy.effective_date, policy.expiry_date)
+    return merged, new_annual, annual_delta, billed
+
+
 @router.post("/events")
 def consume_event(body: DomainEventIn, db: Session = Depends(get_db)):
     from app.event_handlers import handle_domain_event
@@ -88,39 +165,70 @@ def get_policy(policy_id: str, db: Session = Depends(get_db), user: dict = Depen
     return policy
 
 
+@router.get("/api/policies/{policy_id}/cancel-preview", response_model=CancelPreviewOut)
+def cancel_preview(policy_id: str, db: Session = Depends(get_db), _=Depends(agent_auth)):
+    policy = db.get(Policy, policy_id)
+    if not policy or policy.status != "ACTIVE":
+        raise HTTPException(400, "Active policy required")
+    now = datetime.now(timezone.utc)
+    return CancelPreviewOut(
+        policy_id=policy.id,
+        annual_premium=policy.annual_premium,
+        term_days=term_days(policy.effective_date, policy.expiry_date),
+        remaining_days=remaining_days(policy.effective_date, policy.expiry_date, now),
+        remaining_fraction=remaining_fraction(policy.effective_date, policy.expiry_date, now),
+        unearned_premium=unearned_premium(
+            policy.annual_premium, policy.effective_date, policy.expiry_date, now
+        ),
+    )
+
+
+@router.post("/api/policies/{policy_id}/endorse-preview", response_model=EndorsePreviewOut)
+def endorse_preview(
+    policy_id: str,
+    body: EndorsePreviewIn,
+    db: Session = Depends(get_db),
+    _=Depends(admin_auth),
+):
+    policy = db.get(Policy, policy_id)
+    if not policy or policy.status != "ACTIVE":
+        raise HTTPException(400, "Active policy required")
+    _, new_annual, annual_delta, billed = _compute_endorse(policy, body)
+    return EndorsePreviewOut(
+        policy_id=policy.id,
+        current_annual=policy.annual_premium,
+        new_annual=new_annual,
+        annual_delta=annual_delta,
+        remaining_fraction=remaining_fraction(policy.effective_date, policy.expiry_date),
+        billed_amount=billed,
+    )
+
+
 @router.post("/api/policies/{policy_id}/endorse", response_model=PolicyOut)
 def endorse(policy_id: str, body: EndorsementCreate, db: Session = Depends(get_db), _=Depends(admin_auth)):
     policy = db.get(Policy, policy_id)
     if not policy or policy.status != "ACTIVE":
         raise HTTPException(400, "Active policy required")
+
+    merged, new_annual, annual_delta, billed = _compute_endorse(policy, body)
     end = Endorsement(
         policy_id=policy.id,
         endorsement_type=body.endorsement_type,
         description=body.description,
-        premium_delta=body.premium_delta,
+        premium_delta=annual_delta,
+        billed_amount=billed,
     )
     db.add(end)
     db.flush()
-    policy.annual_premium = round(policy.annual_premium + body.premium_delta, 2)
-    if body.risk_attributes:
-        merged = dict(policy.risk_attributes or {})
-        merged.update(body.risk_attributes)
-        policy.risk_attributes = merged
-    if body.premium_delta:
-        enqueue_event(
+    policy.annual_premium = new_annual
+    policy.risk_attributes = merged
+    if abs(billed) >= 0.01:
+        _emit_premium_or_credit(
             db,
-            event_type="PremiumDue",
-            aggregate_type="policy",
-            aggregate_id=policy.id,
-            payload={
-                "policy_id": policy.id,
-                "policy_number": policy.policy_number,
-                "party_id": policy.party_id,
-                "product_code": policy.product_code,
-                "amount": body.premium_delta,
-                "invoice_type": "ENDORSEMENT",
-                "endorsement_id": end.id,
-            },
+            policy,
+            amount=billed,
+            invoice_type="ENDORSEMENT",
+            extra={"endorsement_id": end.id, "annual_delta": annual_delta},
         )
     db.commit()
     db.refresh(policy)
@@ -150,6 +258,7 @@ def renew(policy_id: str, db: Session = Depends(get_db), _=Depends(agent_auth)):
             "expiry_date": policy.expiry_date.isoformat(),
         },
     )
+    record_event("PremiumDue", "produced", settings.service_name)
     db.commit()
     db.refresh(policy)
     return policy
@@ -160,7 +269,37 @@ def cancel(policy_id: str, db: Session = Depends(get_db), _=Depends(agent_auth))
     policy = db.get(Policy, policy_id)
     if not policy or policy.status != "ACTIVE":
         raise HTTPException(400, "Active policy required")
+    now = datetime.now(timezone.utc)
+    refund = unearned_premium(policy.annual_premium, policy.effective_date, policy.expiry_date, now)
     policy.status = "CANCELLED"
+    policy.cancelled_at = now
+    policy.cancellation_refund = refund
+    payload = {
+        "policy_id": policy.id,
+        "policy_number": policy.policy_number,
+        "party_id": policy.party_id,
+        "product_code": policy.product_code,
+        "cancelled_at": now.isoformat(),
+        "unearned_premium": refund,
+        "remaining_fraction": remaining_fraction(policy.effective_date, policy.expiry_date, now),
+        "annual_premium": policy.annual_premium,
+    }
+    enqueue_event(
+        db,
+        event_type="PolicyCancelled",
+        aggregate_type="policy",
+        aggregate_id=policy.id,
+        payload=payload,
+    )
+    record_event("PolicyCancelled", "produced", settings.service_name)
+    if refund >= 0.01:
+        _emit_premium_or_credit(
+            db,
+            policy,
+            amount=-refund,
+            invoice_type="CANCELLATION",
+            extra={"cancelled_at": now.isoformat()},
+        )
     db.commit()
     db.refresh(policy)
     return policy

@@ -113,15 +113,28 @@ def pay_invoice(
     db.flush()
     inv.status = "PAID"
     inv.paid_at = datetime.now(timezone.utc)
-    _post_journal(
-        db,
-        reference_type="payment",
-        reference_id=payment.id,
-        memo=f"Premium collection {inv.invoice_number} via {payment.method}",
-        debit_account=debit_account_for(payment.method),
-        credit_account="AR_PREMIUM",
-        amount=body.amount,
-    )
+    is_credit = inv.invoice_type in ("CREDIT", "CANCELLATION") or inv.invoice_number.startswith("CR-")
+    if is_credit:
+        # Refund / credit settlement: clear premium payable
+        _post_journal(
+            db,
+            reference_type="refund",
+            reference_id=payment.id,
+            memo=f"Premium refund {inv.invoice_number} via {payment.method}",
+            debit_account="PREMIUM_PAYABLE",
+            credit_account=debit_account_for(payment.method),
+            amount=body.amount,
+        )
+    else:
+        _post_journal(
+            db,
+            reference_type="payment",
+            reference_id=payment.id,
+            memo=f"Premium collection {inv.invoice_number} via {payment.method}",
+            debit_account=debit_account_for(payment.method),
+            credit_account="AR_PREMIUM",
+            amount=body.amount,
+        )
     db.commit()
     db.refresh(payment)
     return payment

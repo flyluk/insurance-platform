@@ -17,6 +17,7 @@ from insurance_shared.runtime import event_runtime
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     OutboxBase.metadata.create_all(bind=engine)
+    _ensure_lifecycle_columns()
     db = SessionLocal()
     try:
         from app.seed import seed_demo_policy
@@ -33,6 +34,19 @@ async def lifespan(app: FastAPI):
         handler=handle_domain_event,
     ):
         yield
+
+
+def _ensure_lifecycle_columns() -> None:
+    from sqlalchemy import text
+
+    statements = [
+        "ALTER TABLE policies ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ",
+        "ALTER TABLE policies ADD COLUMN IF NOT EXISTS cancellation_refund DOUBLE PRECISION",
+        "ALTER TABLE endorsements ADD COLUMN IF NOT EXISTS billed_amount DOUBLE PRECISION DEFAULT 0",
+    ]
+    with engine.begin() as conn:
+        for stmt in statements:
+            conn.execute(text(stmt))
 
 
 app = FastAPI(title="Policy Admin Service", lifespan=lifespan)

@@ -81,8 +81,8 @@ Redeploy after code changes:
 
 1. Sign in as **agent** → create party → pick published plan (+ riders) → rate → submit  
 2. Sign in as **underwriter** → decide referrals (auto-accept/decline may already bind)  
-3. **Policies** appear when UW accepts → renew / cancel (policy change is **admin** only)  
-4. **Claims** → open FNOL on an active policy → attach evidence documents → settle (triggers finance disbursement)  
+3. **Policies** appear when UW accepts → renew / cancel with **pro-rata refund credit** (policy change is **admin** only, **re-rates** mid-term)  
+4. **Claims** → open FNOL on an **ACTIVE** policy only → attach evidence documents → settle (triggers finance disbursement)  
 5. **Finance** → pay premium invoices → view ledger  
 6. Sign in to **Product Studio** as **product** → manage plans/riders → publish for quoting  
 7. Sign in to **Policyholder portal** as **policyholder** → view policy → pay invoice (CARD/ACH) → file a claim  
@@ -106,6 +106,13 @@ Staff and policyholders can attach evidence to a claim (`PHOTO`, `POLICE_REPORT`
 - `DELETE /api/claims/{id}/documents/{doc_id}` — staff/admin only
 - Stored in Postgres (`BYTEA`) so multi-replica claims pods share evidence without object storage
 - Max **5 MB**; allowed types: JPEG, PNG, WebP, PDF, plain text
+
+### Policy lifecycle
+
+- **Cancel** — computes unearned premium for the remaining term, sets `cancelled_at` / `cancellation_refund`, voids open premium invoices, and emits `PremiumCredit` (`CANCELLATION`) for the refund
+- **Endorse** — by default **re-rates** from risk attributes + published plan/rider rates; bills/credits the **prorated** mid-term delta (`billed_amount`)
+- Preview endpoints: `GET .../cancel-preview`, `POST .../endorse-preview`
+- **Claims** — staff and policyholders may open FNOL only when the policy is `ACTIVE` (verified via policy-admin)
 
 ## Observability
 

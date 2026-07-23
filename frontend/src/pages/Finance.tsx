@@ -51,7 +51,7 @@ export default function Finance() {
     <div className="stack">
       <div className="hero">
         <h1>Finance</h1>
-        <p>Premium invoices, collections, claim disbursements, and GL entries.</p>
+        <p>Premium invoices, credits/refunds, claim disbursements, and GL entries.</p>
       </div>
       <div className="panel">
         <h3>Invoices</h3>
@@ -77,7 +77,9 @@ export default function Finance() {
                 <td>
                   {inv.status === "OPEN" && (
                     <button className="btn" type="button" onClick={() => pay(inv)}>
-                      Record payment
+                      {["CREDIT", "CANCELLATION"].includes(inv.invoice_type) || inv.invoice_number.startsWith("CR-")
+                        ? "Record refund"
+                        : "Record payment"}
                     </button>
                   )}
                 </td>
