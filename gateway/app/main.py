@@ -179,8 +179,13 @@ async def proxy(full_path: str, request: Request):
     body = await request.body()
     client: httpx.AsyncClient = request.app.state.http
     upstream = await client.request(request.method, url, content=body, headers=headers)
+    response_headers = {}
+    for name in ("content-disposition", "content-length"):
+        if name in upstream.headers:
+            response_headers[name] = upstream.headers[name]
     return Response(
         content=upstream.content,
         status_code=upstream.status_code,
         media_type=upstream.headers.get("content-type"),
+        headers=response_headers,
     )
