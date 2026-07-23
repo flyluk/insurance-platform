@@ -84,21 +84,16 @@ def list_parties(db: Session = Depends(get_db), user: dict = Depends(auth)):
 @router.get("/parties/search", response_model=list[PartyOut])
 def search_parties(
     name: str,
-    email: str,
     db: Session = Depends(get_db),
     _=Depends(agent_auth),
 ):
-    """Find existing clients by name + email before creating a duplicate."""
+    """Find existing clients by name before creating a duplicate."""
     name_q = (name or "").strip()
-    email_q = (email or "").strip()
-    if not name_q or not email_q:
-        raise HTTPException(400, "Name and email are required for client search")
+    if not name_q:
+        raise HTTPException(400, "Name is required for client search")
     return (
         db.query(Party)
-        .filter(
-            Party.full_name.ilike(f"%{name_q}%"),
-            Party.email.ilike(f"%{email_q}%"),
-        )
+        .filter(Party.full_name.ilike(f"%{name_q}%"))
         .order_by(Party.full_name)
         .limit(50)
         .all()
