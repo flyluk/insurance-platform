@@ -42,3 +42,39 @@ def test_list_applications(api_client, agent_headers):
     resp = api_client.get("/api/nb/applications", headers=agent_headers)
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
+
+
+def test_search_parties_by_name_and_email(api_client, agent_headers):
+    """Client search requires name+email and returns matching parties."""
+    email = unique_email("search")
+    created = api_client.post(
+        "/api/nb/parties",
+        headers=agent_headers,
+        json={"full_name": "Searchable Client", "email": email, "address": "1 Main St"},
+    )
+    assert created.status_code == 200
+    party_id = created.json()["id"]
+
+    hits = api_client.get(
+        "/api/nb/parties/search",
+        headers=agent_headers,
+        params={"name": "Searchable", "email": email.split("@")[0]},
+    )
+    assert hits.status_code == 200
+    ids = {p["id"] for p in hits.json()}
+    assert party_id in ids
+
+    missing = api_client.get(
+        "/api/nb/parties/search",
+        headers=agent_headers,
+        params={"name": "Searchable", "email": "nobody-matches@example.com"},
+    )
+    assert missing.status_code == 200
+    assert missing.json() == []
+
+    bad = api_client.get(
+        "/api/nb/parties/search",
+        headers=agent_headers,
+        params={"name": "", "email": email},
+    )
+    assert bad.status_code == 400
