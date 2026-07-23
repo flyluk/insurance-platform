@@ -47,27 +47,31 @@ def test_list_applications(api_client, agent_headers):
 def test_search_parties_by_name(api_client, agent_headers):
     """Client search requires name and returns exact/partial matches."""
     email = unique_email("search")
+    unique_name = f"Searchable Client {email.split('@')[0]}"
     created = api_client.post(
         "/api/nb/parties",
         headers=agent_headers,
-        json={"full_name": "Searchable Client", "email": email, "address": "1 Main St"},
+        json={"full_name": unique_name, "email": email, "address": "1 Main St"},
     )
     assert created.status_code == 200
     party_id = created.json()["id"]
 
     for path in ("/api/nb/clients/search", "/api/nb/parties/search"):
-        hits = api_client.get(path, headers=agent_headers, params={"name": "Searchable"})
+        hits = api_client.get(path, headers=agent_headers, params={"name": "Searchable Client"})
         assert hits.status_code == 200, path
         ids = {p["id"] for p in hits.json()}
         assert party_id in ids
 
-        partial = api_client.get(path, headers=agent_headers, params={"name": "client"})
+        partial = api_client.get(path, headers=agent_headers, params={"name": email.split("@")[0]})
+        # token from unique email fragment may not be in name — use last name token instead
+        partial = api_client.get(path, headers=agent_headers, params={"name": unique_name.split()[-1]})
         assert partial.status_code == 200
         assert party_id in {p["id"] for p in partial.json()}
 
-        exact = api_client.get(path, headers=agent_headers, params={"name": "Searchable Client"})
+        exact = api_client.get(path, headers=agent_headers, params={"name": unique_name})
         assert exact.status_code == 200
         assert exact.json()[0]["id"] == party_id
+        assert exact.json()[0]["full_name"] == unique_name
 
     missing = api_client.get(
         "/api/nb/clients/search",
