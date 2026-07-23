@@ -82,7 +82,7 @@ Redeploy after code changes:
 1. Sign in as **agent** → create party → pick published plan (+ riders) → rate → submit  
 2. Sign in as **underwriter** → decide referrals (auto-accept/decline may already bind)  
 3. **Policies** appear when UW accepts → renew / cancel (policy change is **admin** only)  
-4. **Claims** → open FNOL on an active policy → settle (triggers finance disbursement)  
+4. **Claims** → open FNOL on an active policy → attach evidence documents → settle (triggers finance disbursement)  
 5. **Finance** → pay premium invoices → view ledger  
 6. Sign in to **Product Studio** as **product** → manage plans/riders → publish for quoting  
 7. Sign in to **Policyholder portal** as **policyholder** → view policy → pay invoice (CARD/ACH) → file a claim  
