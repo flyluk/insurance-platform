@@ -15,6 +15,15 @@ type Props = {
   compact?: boolean;
 };
 
+function Field({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="party-field">
+      <span className="party-field-label">{label}</span>
+      <span className="party-field-value">{value?.trim() ? value : "—"}</span>
+    </div>
+  );
+}
+
 export function partyLabel(party?: PartySummary | null, fallbackId?: string) {
   if (party?.full_name) return party.full_name;
   if (party?.email) return party.email;
@@ -45,32 +54,14 @@ export default function PartyDetails({ role, party, compact = false }: Props) {
   return (
     <div className={`party-card${compact ? " compact" : ""}`}>
       <div className="party-role">{role}</div>
-      <strong>{party.full_name || "—"}</strong>
-      <div className="detail-grid" style={{ marginTop: "0.5rem" }}>
-        <div className="detail-row">
-          <span className="muted">Name</span>
-          <strong>{party.full_name || "—"}</strong>
-        </div>
-        <div className="detail-row">
-          <span className="muted">DOB</span>
-          <strong>{party.date_of_birth || "—"}</strong>
-        </div>
-        <div className="detail-row">
-          <span className="muted">Address</span>
-          <strong>{party.address || "—"}</strong>
-        </div>
-        {!compact && party.email && (
-          <div className="detail-row">
-            <span className="muted">Email</span>
-            <strong>{party.email}</strong>
-          </div>
-        )}
-        {!compact && party.phone && (
-          <div className="detail-row">
-            <span className="muted">Phone</span>
-            <strong>{party.phone}</strong>
-          </div>
-        )}
+      <div className="party-name">{party.full_name || "—"}</div>
+      <div className="party-fields">
+        <Field label="Name" value={party.full_name} />
+        <Field label="DOB" value={party.date_of_birth} />
+        <Field label="Address" value={party.address} />
+        {!compact && <Field label="Email" value={party.email} />}
+        {!compact && <Field label="Phone" value={party.phone} />}
+        {!compact && <Field label="ID number" value={party.id_number} />}
       </div>
     </div>
   );

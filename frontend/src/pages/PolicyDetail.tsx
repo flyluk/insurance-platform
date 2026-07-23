@@ -310,11 +310,6 @@ export default function PolicyDetail() {
               </div>
             )}
           </div>
-          <h4>Parties</h4>
-          <div className="party-pair">
-            <PartyDetails role="Owner" party={policy.owner} />
-            <PartyDetails role="Insured" party={policy.insured} />
-          </div>
           {isActive && isAdmin && (
             <div className="row">
               <button className="btn" type="button" onClick={openChangeForm}>
@@ -327,6 +322,14 @@ export default function PolicyDetail() {
         <div className="panel stack">
           <h3>Risk attributes</h3>
           <div className="detail-grid">{formatRisk(policy.risk_attributes) || <span className="muted">None</span>}</div>
+        </div>
+      </div>
+
+      <div className="panel stack">
+        <h3>Parties</h3>
+        <div className="party-pair">
+          <PartyDetails role="Owner" party={policy.owner} />
+          <PartyDetails role="Insured" party={policy.insured} />
         </div>
       </div>
 
