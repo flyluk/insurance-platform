@@ -18,7 +18,26 @@ type Claim = {
   status: string;
   description: string;
   loss_date: string;
+  document_count?: number;
 };
+
+type ClaimDocument = {
+  id: string;
+  filename: string;
+  content_type: string;
+  category: string;
+  size_bytes: number;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+const CATEGORIES = ["PHOTO", "POLICE_REPORT", "MEDICAL", "INVOICE", "OTHER"];
+
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export default function Claims() {
   const { user } = useAuth();
@@ -30,6 +49,12 @@ export default function Claims() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [docs, setDocs] = useState<ClaimDocument[]>([]);
+  const [category, setCategory] = useState("PHOTO");
+  const [file, setFile] = useState<File | null>(null);
+  const [docError, setDocError] = useState("");
+  const [docBusy, setDocBusy] = useState(false);
 
   async function refresh() {
     const [p, c] = await Promise.all([api.get("/policies"), api.get("/claims")]);
@@ -39,10 +64,23 @@ export default function Claims() {
     if (active && !policyId) setPolicyId(active.id);
   }
 
+  async function loadDocs(claimId: string) {
+    const { data } = await api.get(`/claims/${claimId}/documents`);
+    setDocs(data);
+  }
+
   useEffect(() => {
     refresh().catch(console.error);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setDocs([]);
+      return;
+    }
+    loadDocs(selectedId).catch(console.error);
+  }, [selectedId]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -64,8 +102,9 @@ export default function Claims() {
         loss_date: lossDate,
         reserve_amount: 0,
       });
-      setSuccess(`Claim ${data.claim_number} submitted.`);
+      setSuccess(`Claim ${data.claim_number} submitted. You can attach photos or reports below.`);
       setDescription("");
+      setSelectedId(data.id);
       await refresh();
     } catch (err: unknown) {
       const detail =
@@ -77,13 +116,50 @@ export default function Claims() {
     }
   }
 
+  async function uploadDoc(e: FormEvent) {
+    e.preventDefault();
+    if (!selectedId || !file) return;
+    setDocBusy(true);
+    setDocError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("category", category);
+      await api.post(`/claims/${selectedId}/documents`, form);
+      setFile(null);
+      await loadDocs(selectedId);
+      await refresh();
+      setSuccess("Document uploaded.");
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (err instanceof Error ? err.message : "Upload failed");
+      setDocError(String(detail));
+    } finally {
+      setDocBusy(false);
+    }
+  }
+
+  async function downloadDoc(doc: ClaimDocument) {
+    if (!selectedId) return;
+    const res = await api.get(`/claims/${selectedId}/documents/${doc.id}`, { responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = doc.filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const activePolicies = policies.filter((p) => p.status === "ACTIVE");
+  const selected = claims.find((c) => c.id === selectedId) || null;
+  const canUpload = selected && !["SETTLED", "DENIED"].includes(selected.status);
 
   return (
     <div className="stack">
       <div className="hero">
         <h1>Claims</h1>
-        <p>File a first notice of loss and track open claims on your policies.</p>
+        <p>File a first notice of loss, attach evidence, and track open claims.</p>
       </div>
       <div className="grid-2">
         <form className="panel stack" onSubmit={onSubmit}>
@@ -128,12 +204,16 @@ export default function Claims() {
                 <th>Number</th>
                 <th>Line</th>
                 <th>Status</th>
-                <th>Loss date</th>
+                <th>Docs</th>
               </tr>
             </thead>
             <tbody>
               {claims.map((c) => (
-                <tr key={c.id}>
+                <tr
+                  key={c.id}
+                  style={{ cursor: "pointer", background: selectedId === c.id ? "rgba(31,107,79,0.08)" : undefined }}
+                  onClick={() => setSelectedId(c.id)}
+                >
                   <td>
                     <div>{c.claim_number}</div>
                     <div className="muted">{c.description}</div>
@@ -142,7 +222,7 @@ export default function Claims() {
                   <td>
                     <span className="badge">{c.status}</span>
                   </td>
-                  <td>{c.loss_date}</td>
+                  <td>{c.document_count ?? 0}</td>
                 </tr>
               ))}
               {!claims.length && (
@@ -156,6 +236,74 @@ export default function Claims() {
           </table>
         </div>
       </div>
+
+      {selected && (
+        <div className="panel stack">
+          <h3>Evidence · {selected.claim_number}</h3>
+          <p className="muted">Upload photos, police reports, medical notes, or repair invoices (max 5 MB).</p>
+          {canUpload ? (
+            <form className="row" onSubmit={uploadDoc} style={{ alignItems: "flex-end" }}>
+              <label>
+                Category
+                <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                File
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf,text/plain"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                />
+              </label>
+              <button className="btn" type="submit" disabled={!file || docBusy}>
+                {docBusy ? "Uploading…" : "Upload"}
+              </button>
+            </form>
+          ) : (
+            <p className="muted">This claim is closed; documents are view-only.</p>
+          )}
+          {docError && <div className="error">{docError}</div>}
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Category</th>
+                <th>Size</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((d) => (
+                <tr key={d.id}>
+                  <td>{d.filename}</td>
+                  <td>
+                    <span className="badge">{d.category}</span>
+                  </td>
+                  <td>{formatBytes(d.size_bytes)}</td>
+                  <td>
+                    <button className="btn ghost" type="button" onClick={() => downloadDoc(d)}>
+                      Download
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!docs.length && (
+                <tr>
+                  <td colSpan={4} className="muted">
+                    No evidence attached yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,9 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+DocumentCategory = Literal["PHOTO", "POLICE_REPORT", "MEDICAL", "INVOICE", "OTHER"]
 
 
 class ClaimCreate(BaseModel):
@@ -33,6 +36,21 @@ class ClaimOut(BaseModel):
     settlement_amount: float | None
     created_at: datetime
     updated_at: datetime
+    document_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class ClaimDocumentOut(BaseModel):
+    id: str
+    claim_id: str
+    filename: str
+    content_type: str
+    category: str
+    size_bytes: int
+    uploaded_by: str | None
+    uploaded_by_role: str | None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
-from app.models import Claim  # noqa: F401
+from app.models import Claim, ClaimDocument  # noqa: F401
 from app.routers import claims
 from insurance_shared.events import OutboxBase
 from insurance_shared.metrics import PrometheusMiddleware, metrics_response

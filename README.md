@@ -96,6 +96,17 @@ Self-serve collections use a **simulated processor** (no external PSP):
 - Full PAN/account numbers are never stored; only a processor reference and masked last-4 are kept
 - Staff Finance can still record payments without instrument details
 
+### Claim documents
+
+Staff and policyholders can attach evidence to a claim (`PHOTO`, `POLICE_REPORT`, `MEDICAL`, `INVOICE`, `OTHER`):
+
+- `POST /api/claims/{id}/documents` — multipart upload (`file` + `category`)
+- `GET /api/claims/{id}/documents` — list metadata
+- `GET /api/claims/{id}/documents/{doc_id}` — download bytes
+- `DELETE /api/claims/{id}/documents/{doc_id}` — staff/admin only
+- Stored in Postgres (`BYTEA`) so multi-replica claims pods share evidence without object storage
+- Max **5 MB**; allowed types: JPEG, PNG, WebP, PDF, plain text
+
 ## Observability
 
 - Each service exposes `/health` and `/metrics` (Prometheus)
