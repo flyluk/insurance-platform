@@ -8,19 +8,35 @@ from app.schemas import CaseOut, DecisionIn, DomainEventIn
 from insurance_shared.auth import make_auth_dependency
 from insurance_shared.events import enqueue_event
 from insurance_shared.metrics import record_event
-from insurance_shared.parties import summary_from_snapshot
+from insurance_shared.parties import snapshot_incomplete, summary_from_snapshot
+from insurance_shared.party_client import enrich_snapshot, fetch_parties
 
 router = APIRouter(tags=["underwriting"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
 uw_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "underwriter", "admin")
 
 
-def _case_out(case: UnderwritingCase) -> CaseOut:
+def _party_cache_for_cases(cases: list[UnderwritingCase]) -> dict:
+    need: set[str] = set()
+    for case in cases:
+        owner_id = case.party_id
+        insured_id = case.insured_party_id or case.party_id
+        if snapshot_incomplete(case.owner_snapshot):
+            need.add(owner_id)
+        if snapshot_incomplete(case.insured_snapshot):
+            need.add(insured_id)
+    return fetch_parties(settings.new_business_url, need)
+
+
+def _case_out(case: UnderwritingCase, cache: dict | None = None) -> CaseOut:
     data = CaseOut.model_validate(case)
     insured_id = case.insured_party_id or case.party_id
+    party_cache = cache if cache is not None else _party_cache_for_cases([case])
+    owner_snap = enrich_snapshot(case.owner_snapshot, party_id=case.party_id, cache=party_cache)
+    insured_snap = enrich_snapshot(case.insured_snapshot, party_id=insured_id, cache=party_cache)
     data.insured_party_id = insured_id
-    data.owner = summary_from_snapshot(case.owner_snapshot, fallback_id=case.party_id)
-    data.insured = summary_from_snapshot(case.insured_snapshot, fallback_id=insured_id)
+    data.owner = summary_from_snapshot(owner_snap, fallback_id=case.party_id)
+    data.insured = summary_from_snapshot(insured_snap, fallback_id=insured_id)
     return data
 
 
@@ -62,7 +78,9 @@ def list_cases(status: str | None = None, db: Session = Depends(get_db), _=Depen
     q = db.query(UnderwritingCase).order_by(UnderwritingCase.created_at.desc())
     if status:
         q = q.filter(UnderwritingCase.status == status)
-    return [_case_out(c) for c in q.limit(200).all()]
+    cases = q.limit(200).all()
+    cache = _party_cache_for_cases(cases)
+    return [_case_out(c, cache) for c in cases]
 
 
 @router.get("/api/uw/cases/{case_id}", response_model=CaseOut)
@@ -81,7 +99,8 @@ def referral_queue(db: Session = Depends(get_db), _=Depends(uw_auth)):
         .order_by(UnderwritingCase.created_at)
         .all()
     )
-    return [_case_out(c) for c in cases]
+    cache = _party_cache_for_cases(cases)
+    return [_case_out(c, cache) for c in cases]
 
 
 @router.post("/api/uw/cases/{case_id}/decide", response_model=CaseOut)

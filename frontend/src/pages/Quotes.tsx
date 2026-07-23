@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import api from "../api/client";
-import { PartySummary, partyLabel } from "../components/PartyDetails";
+import { PartyCell, PartySummary } from "../components/PartyDetails";
 
 type Party = {
   id: string;
@@ -407,8 +407,8 @@ export default function Quotes() {
             {quotes.map((q) => (
               <tr key={q.id}>
                 <td>{q.product_code}</td>
-                <td>{partyLabel(q.owner, q.party_id)}</td>
-                <td>{partyLabel(q.insured, q.insured_party_id || q.party_id)}</td>
+                <td><PartyCell party={q.owner} /></td>
+                <td><PartyCell party={q.insured} /></td>
                 <td>
                   <span className="badge">{q.status}</span>
                 </td>
@@ -447,8 +447,8 @@ export default function Quotes() {
             {apps.map((a) => (
               <tr key={a.id}>
                 <td>{a.product_code}</td>
-                <td>{partyLabel(a.owner)}</td>
-                <td>{partyLabel(a.insured)}</td>
+                <td><PartyCell party={a.owner} /></td>
+                <td><PartyCell party={a.insured} /></td>
                 <td>
                   <span className="badge">{a.status}</span>
                 </td>

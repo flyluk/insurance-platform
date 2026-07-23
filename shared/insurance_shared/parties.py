@@ -48,3 +48,22 @@ def summary_from_snapshot(data: dict[str, Any] | None, *, fallback_id: str | Non
         id_number=data.get("id_number"),
         gender=data.get("gender"),
     )
+
+
+def snapshot_incomplete(data: dict[str, Any] | None) -> bool:
+    """True when a stored snapshot is missing display fields (name / DOB / address)."""
+    data = data or {}
+    if not data.get("id") and not (data.get("full_name") or "").strip():
+        return True
+    return not (data.get("full_name") or "").strip()
+
+
+def merge_snapshot(base: dict[str, Any] | None, enrich: dict[str, Any] | None) -> dict[str, Any]:
+    """Prefer non-empty fields from enrich over base."""
+    out = dict(base or {})
+    for key, value in (enrich or {}).items():
+        if value is None or value == "":
+            continue
+        if not out.get(key):
+            out[key] = value
+    return out

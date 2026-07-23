@@ -21,6 +21,18 @@ export function partyLabel(party?: PartySummary | null, fallbackId?: string) {
   return party?.id || fallbackId || "—";
 }
 
+/** Table cell: name, DOB, address — never lead with raw party UUID. */
+export function PartyCell({ party }: { party?: PartySummary | null }) {
+  if (!party) return <span className="muted">—</span>;
+  return (
+    <div className="party-cell">
+      <strong>{party.full_name || "—"}</strong>
+      <div className="muted">DOB {party.date_of_birth || "—"}</div>
+      <div className="muted">{party.address || "No address on file"}</div>
+    </div>
+  );
+}
+
 export default function PartyDetails({ role, party, compact = false }: Props) {
   if (!party) {
     return (
@@ -31,55 +43,41 @@ export default function PartyDetails({ role, party, compact = false }: Props) {
     );
   }
 
-  if (compact) {
-    return (
-      <div className="party-card compact">
-        <div className="party-role">{role}</div>
-        <strong>{party.full_name || "—"}</strong>
-        {party.email && <div className="muted">{party.email}</div>}
-      </div>
-    );
-  }
-
   return (
-    <div className="party-card">
+    <div className={`party-card${compact ? " compact" : ""}`}>
       <div className="party-role">{role}</div>
       <strong>{party.full_name || "—"}</strong>
       <div className="detail-grid" style={{ marginTop: "0.5rem" }}>
-        {party.email && (
+        <div className="detail-row">
+          <span className="muted">Name</span>
+          <strong>{party.full_name || "—"}</strong>
+        </div>
+        <div className="detail-row">
+          <span className="muted">DOB</span>
+          <strong>{party.date_of_birth || "—"}</strong>
+        </div>
+        <div className="detail-row">
+          <span className="muted">Address</span>
+          <strong>{party.address || "—"}</strong>
+        </div>
+        {!compact && party.email && (
           <div className="detail-row">
             <span className="muted">Email</span>
             <strong>{party.email}</strong>
           </div>
         )}
-        {party.phone && (
+        {!compact && party.phone && (
           <div className="detail-row">
             <span className="muted">Phone</span>
             <strong>{party.phone}</strong>
           </div>
         )}
-        {party.date_of_birth && (
+        {!compact && party.id_number && (
           <div className="detail-row">
-            <span className="muted">DOB</span>
-            <strong>{party.date_of_birth}</strong>
-          </div>
-        )}
-        {party.address && (
-          <div className="detail-row">
-            <span className="muted">Address</span>
-            <strong>{party.address}</strong>
-          </div>
-        )}
-        {party.id_number && (
-          <div className="detail-row">
-            <span className="muted">ID</span>
+            <span className="muted">ID number</span>
             <strong>{party.id_number}</strong>
           </div>
         )}
-        <div className="detail-row">
-          <span className="muted">Party ID</span>
-          <strong className="mono">{party.id}</strong>
-        </div>
       </div>
     </div>
   );

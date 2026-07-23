@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import api from "../api/client";
-import PartyDetails, { PartySummary, partyLabel } from "../components/PartyDetails";
+import PartyDetails, { PartyCell, PartySummary, partyLabel } from "../components/PartyDetails";
 
 type Policy = {
   id: string;
@@ -202,8 +202,8 @@ export default function Claims() {
               >
                 <td>{c.claim_number}</td>
                 <td>{c.product_code}</td>
-                <td>{partyLabel(c.owner)}</td>
-                <td>{partyLabel(c.insured)}</td>
+                <td><PartyCell party={c.owner} /></td>
+                <td><PartyCell party={c.insured} /></td>
                 <td>
                   <span className="badge">{c.status}</span>
                 </td>

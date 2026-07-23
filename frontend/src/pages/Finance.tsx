@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
-import { PartySummary, partyLabel } from "../components/PartyDetails";
+import { PartyCell, PartySummary } from "../components/PartyDetails";
 
 type Invoice = {
   id: string;
@@ -75,7 +75,7 @@ export default function Finance() {
             {invoices.map((inv) => (
               <tr key={inv.id}>
                 <td>{inv.invoice_number}</td>
-                <td>{partyLabel(inv.owner, inv.party_id)}</td>
+                <td><PartyCell party={inv.owner} /></td>
                 <td>{inv.invoice_type}</td>
                 <td>{inv.amount}</td>
                 <td>
@@ -110,7 +110,7 @@ export default function Finance() {
             {disbursements.map((d) => (
               <tr key={d.id}>
                 <td>{d.claim_number}</td>
-                <td>{partyLabel(d.owner, d.party_id)}</td>
+                <td><PartyCell party={d.owner} /></td>
                 <td>{d.amount}</td>
                 <td>
                   <span className="badge">{d.status}</span>

@@ -13,7 +13,8 @@ from app.schemas import ClaimCreate, ClaimDocumentOut, ClaimOut, ReserveUpdate, 
 from insurance_shared.auth import make_auth_dependency
 from insurance_shared.events import enqueue_event
 from insurance_shared.metrics import record_event
-from insurance_shared.parties import summary_from_snapshot
+from insurance_shared.parties import snapshot_incomplete, summary_from_snapshot
+from insurance_shared.party_client import enrich_snapshot, fetch_parties
 
 router = APIRouter(prefix="/api/claims", tags=["claims"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
@@ -77,9 +78,24 @@ def _document_counts(db: Session, claim_ids: list[str]) -> dict[str, int]:
     return {claim_id: count for claim_id, count in rows}
 
 
-def _claim_out(claim: Claim, document_count: int = 0) -> ClaimOut:
+def _party_cache_for_claims(claims: list[Claim]) -> dict:
+    need: set[str] = set()
+    for claim in claims:
+        owner_id = claim.party_id
+        insured_id = claim.insured_party_id or claim.party_id
+        if snapshot_incomplete(claim.owner_snapshot):
+            need.add(owner_id)
+        if snapshot_incomplete(claim.insured_snapshot):
+            need.add(insured_id)
+    return fetch_parties(settings.new_business_url, need)
+
+
+def _claim_out(claim: Claim, document_count: int = 0, cache: dict | None = None) -> ClaimOut:
     owner_id = claim.party_id
     insured_id = claim.insured_party_id or claim.party_id
+    party_cache = cache if cache is not None else _party_cache_for_claims([claim])
+    owner_snap = enrich_snapshot(claim.owner_snapshot, party_id=owner_id, cache=party_cache)
+    insured_snap = enrich_snapshot(claim.insured_snapshot, party_id=insured_id, cache=party_cache)
     return ClaimOut(
         id=claim.id,
         claim_number=claim.claim_number,
@@ -95,8 +111,8 @@ def _claim_out(claim: Claim, document_count: int = 0) -> ClaimOut:
         created_at=claim.created_at,
         updated_at=claim.updated_at,
         document_count=document_count,
-        owner=summary_from_snapshot(claim.owner_snapshot, fallback_id=owner_id),
-        insured=summary_from_snapshot(claim.insured_snapshot, fallback_id=insured_id),
+        owner=summary_from_snapshot(owner_snap, fallback_id=owner_id),
+        insured=summary_from_snapshot(insured_snap, fallback_id=insured_id),
     )
 
 
@@ -155,7 +171,8 @@ def list_claims(db: Session = Depends(get_db), user: dict = Depends(auth)):
         q = q.filter(Claim.party_id == _require_party(user))
     claims = q.order_by(Claim.created_at.desc()).limit(200).all()
     counts = _document_counts(db, [c.id for c in claims])
-    return [_claim_out(c, counts.get(c.id, 0)) for c in claims]
+    cache = _party_cache_for_claims(claims)
+    return [_claim_out(c, counts.get(c.id, 0), cache) for c in claims]
 
 
 @router.get("/{claim_id}", response_model=ClaimOut)

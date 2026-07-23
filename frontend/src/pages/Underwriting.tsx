@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
-import PartyDetails, { PartySummary, partyLabel } from "../components/PartyDetails";
+import PartyDetails, { PartyCell, PartySummary, partyLabel } from "../components/PartyDetails";
 
 type Case = {
   id: string;
@@ -123,8 +123,8 @@ export default function Underwriting() {
                       {c.product_code}
                     </button>
                   </td>
-                  <td>{partyLabel(c.owner, c.party_id)}</td>
-                  <td>{partyLabel(c.insured, c.insured_party_id || c.party_id)}</td>
+                  <td><PartyCell party={c.owner} /></td>
+                  <td><PartyCell party={c.insured} /></td>
                   <td>{c.annual_premium}</td>
                   <td>{c.reason}</td>
                   <td className="row">

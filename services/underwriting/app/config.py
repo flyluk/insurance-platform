@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
 
+    new_business_url: str = "http://new-business:8000"
     new_business_events_url: str = "http://new-business:8000/events"
     policy_admin_events_url: str = "http://policy-admin:8000/events"
     product_engine_url: str = "http://product-engine:8000"

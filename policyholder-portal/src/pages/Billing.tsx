@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import api from "../api/client";
-import { PartySummary, partyLabel } from "../components/PartyDetails";
+import { PartyCell, PartySummary } from "../components/PartyDetails";
 
 type Invoice = {
   id: string;
@@ -108,7 +108,7 @@ export default function Billing() {
                   <div>{inv.invoice_number}</div>
                   {inv.description && <div className="muted">{inv.description}</div>}
                 </td>
-                <td>{partyLabel(inv.owner, inv.party_id)}</td>
+                <td><PartyCell party={inv.owner} /></td>
                 <td>{inv.invoice_type}</td>
                 <td>${inv.amount.toFixed(2)}</td>
                 <td>

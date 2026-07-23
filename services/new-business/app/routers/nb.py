@@ -93,6 +93,15 @@ def get_party(party_id: str, db: Session = Depends(get_db), user: dict = Depends
     return party
 
 
+@router.get("/internal/parties", response_model=list[PartyOut])
+def internal_parties(ids: str = "", db: Session = Depends(get_db)):
+    """Cluster-internal bulk party lookup used to enrich owner/insured snapshots."""
+    id_list = [x.strip() for x in ids.split(",") if x.strip()]
+    if not id_list:
+        return []
+    return db.query(Party).filter(Party.id.in_(id_list)).all()
+
+
 @router.post("/quotes", response_model=QuoteOut)
 def create_quote(body: QuoteCreate, db: Session = Depends(get_db), _=Depends(agent_auth)):
     if not db.get(Party, body.party_id):

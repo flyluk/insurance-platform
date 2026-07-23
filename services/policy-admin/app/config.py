@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
 
     product_engine_url: str = "http://product-engine:8000"
+    new_business_url: str = "http://new-business:8000"
     new_business_events_url: str = "http://new-business:8000/events"
     finance_events_url: str = "http://finance:8000/events"
 

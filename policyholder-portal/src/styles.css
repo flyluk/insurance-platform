@@ -213,6 +213,8 @@ th { color: var(--muted); font-weight: 500; }
   margin-bottom: 0.25rem;
 }
 .party-pair { display: grid; gap: 0.65rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.party-cell { display: grid; gap: 0.15rem; min-width: 9rem; }
+.party-cell strong { font-weight: 600; }
 .detail-grid { display: grid; gap: 0.45rem; }
 .detail-row {
   display: flex;
