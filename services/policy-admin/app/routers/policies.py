@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -16,6 +16,17 @@ router = APIRouter(tags=["policy-admin"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
 agent_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "agent", "admin")
 admin_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "admin")
+
+
+def _is_policyholder(user: dict) -> bool:
+    return user.get("role") == "policyholder"
+
+
+def _require_party(user: dict) -> str:
+    party_id = user.get("party_id")
+    if not party_id:
+        raise HTTPException(403, "Policyholder account is not linked to a party")
+    return party_id
 
 
 def _policy_number(product_code: str) -> str:
@@ -60,14 +71,19 @@ def consume_event(body: DomainEventIn, db: Session = Depends(get_db)):
 
 
 @router.get("/api/policies", response_model=list[PolicyOut])
-def list_policies(db: Session = Depends(get_db), _=Depends(auth)):
-    return db.query(Policy).order_by(Policy.created_at.desc()).limit(200).all()
+def list_policies(db: Session = Depends(get_db), user: dict = Depends(auth)):
+    q = db.query(Policy)
+    if _is_policyholder(user):
+        q = q.filter(Policy.party_id == _require_party(user))
+    return q.order_by(Policy.created_at.desc()).limit(200).all()
 
 
 @router.get("/api/policies/{policy_id}", response_model=PolicyOut)
-def get_policy(policy_id: str, db: Session = Depends(get_db), _=Depends(auth)):
+def get_policy(policy_id: str, db: Session = Depends(get_db), user: dict = Depends(auth)):
     policy = db.get(Policy, policy_id)
     if not policy:
+        raise HTTPException(404, "Policy not found")
+    if _is_policyholder(user) and policy.party_id != _require_party(user):
         raise HTTPException(404, "Policy not found")
     return policy
 
@@ -151,7 +167,12 @@ def cancel(policy_id: str, db: Session = Depends(get_db), _=Depends(agent_auth))
 
 
 @router.get("/api/policies/{policy_id}/endorsements", response_model=list[EndorsementOut])
-def list_endorsements(policy_id: str, db: Session = Depends(get_db), _=Depends(auth)):
+def list_endorsements(policy_id: str, db: Session = Depends(get_db), user: dict = Depends(auth)):
+    policy = db.get(Policy, policy_id)
+    if not policy:
+        raise HTTPException(404, "Policy not found")
+    if _is_policyholder(user) and policy.party_id != _require_party(user):
+        raise HTTPException(404, "Policy not found")
     return (
         db.query(Endorsement)
         .filter(Endorsement.policy_id == policy_id)

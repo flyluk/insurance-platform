@@ -17,6 +17,13 @@ from insurance_shared.runtime import event_runtime
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     OutboxBase.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        from app.seed import seed_demo_policy
+
+        seed_demo_policy(db)
+    finally:
+        db.close()
     async with event_runtime(
         SessionLocal,
         poll_seconds=settings.outbox_poll_seconds,

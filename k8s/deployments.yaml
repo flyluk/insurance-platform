@@ -357,6 +357,11 @@ spec:
                 configMapKeyRef:
                   name: insurance-config
                   key: UVICORN_WORKERS
+            - name: POLICY_ADMIN_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: insurance-config
+                  key: POLICY_ADMIN_URL
           readinessProbe:
             httpGet:
               path: /health
@@ -762,6 +767,54 @@ spec:
   type: LoadBalancer
   selector:
     app: product-portal
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policyholder-portal
+  namespace: insurance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: policyholder-portal
+  template:
+    metadata:
+      labels:
+        app: policyholder-portal
+    spec:
+      containers:
+        - name: web
+          image: insurance-policyholder-portal:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "250m"
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: policyholder-portal
+  namespace: insurance
+spec:
+  type: LoadBalancer
+  selector:
+    app: policyholder-portal
   ports:
     - port: 80
       targetPort: 80

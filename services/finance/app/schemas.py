@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -21,7 +21,16 @@ class InvoiceOut(BaseModel):
 
 class PaymentCreate(BaseModel):
     amount: float = Field(gt=0)
-    method: str = "CASH"
+    method: Literal["CASH", "CARD", "ACH"] = "CASH"
+    # Card (required when method=CARD) — simulated processor; never stored in full
+    card_number: str | None = None
+    card_exp_month: int | None = Field(default=None, ge=1, le=12)
+    card_exp_year: int | None = Field(default=None, ge=2024, le=2100)
+    card_cvv: str | None = None
+    # ACH (required when method=ACH)
+    account_name: str | None = None
+    account_number: str | None = None
+    routing_number: str | None = None
 
 
 class PaymentOut(BaseModel):
@@ -29,6 +38,8 @@ class PaymentOut(BaseModel):
     invoice_id: str
     amount: float
     method: str
+    reference: str | None = None
+    masked_account: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

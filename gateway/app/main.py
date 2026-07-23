@@ -4,27 +4,37 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError
 from passlib.context import CryptContext
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine, get_db
 from app.models import User
 from insurance_shared.auth import create_access_token, decode_token
+from insurance_shared.demo import DEMO_PARTY_ID
 from insurance_shared.metrics import PrometheusMiddleware, metrics_response
-from jose import JWTError
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
 
+# (email, password, full_name, role, party_id)
 SEED_USERS = [
-    ("admin@insurance.local", "admin123", "Platform Admin", "admin"),
-    ("agent@insurance.local", "agent123", "Demo Agent", "agent"),
-    ("uw@insurance.local", "uw123456", "Demo Underwriter", "underwriter"),
-    ("claims@insurance.local", "claims123", "Demo Claims", "claims"),
-    ("finance@insurance.local", "finance123", "Demo Finance", "finance"),
-    ("product@insurance.local", "product123", "Product Manager", "product"),
+    ("admin@insurance.local", "admin123", "Platform Admin", "admin", None),
+    ("agent@insurance.local", "agent123", "Demo Agent", "agent", None),
+    ("uw@insurance.local", "uw123456", "Demo Underwriter", "underwriter", None),
+    ("claims@insurance.local", "claims123", "Demo Claims", "claims", None),
+    ("finance@insurance.local", "finance123", "Demo Finance", "finance", None),
+    ("product@insurance.local", "product123", "Product Manager", "product", None),
+    (
+        "policyholder@insurance.local",
+        "holder123",
+        "Alex Rivera",
+        "policyholder",
+        DEMO_PARTY_ID,
+    ),
 ]
 
 ROUTE_MAP = [
@@ -48,13 +58,22 @@ class TokenOut(BaseModel):
     role: str
     email: str
     full_name: str
+    party_id: str | None = None
+
+
+def _ensure_user_columns() -> None:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS party_id VARCHAR(36)"))
 
 
 def seed_users() -> None:
     db = SessionLocal()
     try:
-        for email, password, name, role in SEED_USERS:
-            if db.query(User).filter(User.email == email).first():
+        for email, password, name, role, party_id in SEED_USERS:
+            existing = db.query(User).filter(User.email == email).first()
+            if existing:
+                if party_id and not existing.party_id:
+                    existing.party_id = party_id
                 continue
             db.add(
                 User(
@@ -62,6 +81,7 @@ def seed_users() -> None:
                     full_name=name,
                     hashed_password=pwd_context.hash(password),
                     role=role,
+                    party_id=party_id,
                 )
             )
         db.commit()
@@ -72,6 +92,7 @@ def seed_users() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _ensure_user_columns()
     seed_users()
     app.state.http = httpx.AsyncClient(timeout=30.0)
     yield
@@ -107,12 +128,14 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         secret=settings.jwt_secret,
         algorithm=settings.jwt_algorithm,
         expire_minutes=settings.jwt_expire_minutes,
+        party_id=user.party_id,
     )
     return TokenOut(
         access_token=token,
         role=user.role,
         email=user.email,
         full_name=user.full_name,
+        party_id=user.party_id,
     )
 
 
@@ -128,6 +151,7 @@ def me(credentials: HTTPAuthorizationCredentials | None = Depends(security)):
         "id": payload.get("sub"),
         "email": payload.get("email"),
         "role": payload.get("role"),
+        "party_id": payload.get("party_id"),
     }
 
 
