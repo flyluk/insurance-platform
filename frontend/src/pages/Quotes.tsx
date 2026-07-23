@@ -181,7 +181,8 @@ export default function Quotes() {
     }
   }
 
-  async function createNewClient() {
+  async function createNewClient(e: FormEvent) {
+    e.preventDefault();
     const missing = [
       !name.trim() && "full name",
       !email.trim() && "email",
@@ -269,26 +270,28 @@ export default function Quotes() {
       </div>
       {msg && <div className="muted">{msg}</div>}
       <div className="grid-2">
-        <form className="panel stack" onSubmit={searchClients}>
-          <h3>Client search</h3>
-          <p className="muted" style={{ margin: 0 }}>
-            Search existing clients by full name only.
-          </p>
-          <label>
-            Full name
-            <input
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setSearched(false);
-                setSearchHits([]);
-              }}
-              required
-            />
-          </label>
-          <button className="btn" type="submit" disabled={searchBusy}>
-            {searchBusy ? "Searching…" : "Search clients"}
-          </button>
+        <div className="panel stack">
+          <form className="stack" onSubmit={searchClients}>
+            <h3>Client search</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Search existing clients by full name only.
+            </p>
+            <label>
+              Full name
+              <input
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setSearched(false);
+                  setSearchHits([]);
+                }}
+                required
+              />
+            </label>
+            <button className="btn" type="submit" disabled={searchBusy}>
+              {searchBusy ? "Searching…" : "Search clients"}
+            </button>
+          </form>
 
           {searched && (
             <div className="stack">
@@ -333,59 +336,61 @@ export default function Quotes() {
             </div>
           )}
 
-          <h4>Create new client</h4>
-          <p className="muted" style={{ margin: 0 }}>
-            Uses the full name above. Email and all other details are required.
-          </p>
-          <label>
-            Email
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
-          </label>
-          <label>
-            Date of birth
-            <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" required />
-          </label>
-          <label>
-            Address
-            <textarea
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              rows={2}
-              placeholder="Street, city, postal code"
-              required
-            />
-          </label>
-          <label>
-            ID number
-            <input
-              value={idNumber}
-              onChange={(e) => setIdNumber(e.target.value)}
-              placeholder="National ID / passport"
-              required
-            />
-          </label>
-          <label>
-            Gender
-            <select value={gender} onChange={(e) => setGender(e.target.value)} required>
-              <option value="">Select…</option>
-              <option value="female">Female</option>
-              <option value="male">Male</option>
-            </select>
-          </label>
-          <label>
-            Contact number
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              type="tel"
-              placeholder="+1 555 0100"
-              required
-            />
-          </label>
-          <button className="btn warn" type="button" onClick={() => createNewClient().catch(console.error)}>
-            Create new client
-          </button>
-        </form>
+          <form className="stack" onSubmit={(e) => createNewClient(e).catch(console.error)}>
+            <h4>Create new client</h4>
+            <p className="muted" style={{ margin: 0 }}>
+              Uses the full name from search. Email and all other details are required.
+            </p>
+            <label>
+              Email
+              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+            </label>
+            <label>
+              Date of birth
+              <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" required />
+            </label>
+            <label>
+              Address
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                rows={2}
+                placeholder="Street, city, postal code"
+                required
+              />
+            </label>
+            <label>
+              ID number
+              <input
+                value={idNumber}
+                onChange={(e) => setIdNumber(e.target.value)}
+                placeholder="National ID / passport"
+                required
+              />
+            </label>
+            <label>
+              Gender
+              <select value={gender} onChange={(e) => setGender(e.target.value)} required>
+                <option value="">Select…</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+              </select>
+            </label>
+            <label>
+              Contact number
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                type="tel"
+                placeholder="+1 555 0100"
+                required
+              />
+            </label>
+            <button className="btn warn" type="submit">
+              Create new client
+            </button>
+          </form>
+        </div>
         <form className="panel stack" onSubmit={createQuote}>
           <h3>New quote</h3>
           {selectedClient ? (
