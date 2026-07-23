@@ -1,5 +1,5 @@
 import pytest
-from helpers import login, unique_email
+from helpers import login, unique_email, party_create_payload
 
 pytestmark = [pytest.mark.api, pytest.mark.story("KAN-5")]
 
@@ -79,7 +79,7 @@ def test_quote_with_rider_rates_above_base(api_client, agent_headers):
     party = api_client.post(
         "/api/nb/parties",
         headers=agent_headers,
-        json={"full_name": "Rider Party", "email": unique_email("rider")},
+        json=party_create_payload("Rider Party", email=unique_email("rider")),
     ).json()
 
     risk = {"vehicle_year": 2022, "drivers": 1, "prior_claims": 0, "driver_age": 34}

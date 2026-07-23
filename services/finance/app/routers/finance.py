@@ -17,6 +17,8 @@ from app.schemas import (
     PaymentOut,
 )
 from insurance_shared.auth import make_auth_dependency
+from insurance_shared.parties import snapshot_incomplete, summary_from_snapshot
+from insurance_shared.party_client import enrich_snapshot, fetch_parties
 
 router = APIRouter(tags=["finance"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
@@ -33,6 +35,32 @@ def _party_id(user: dict) -> str | None:
 
 def _is_policyholder(user: dict) -> bool:
     return user.get("role") == "policyholder"
+
+
+def _party_cache_for_invoices(rows: list[Invoice]) -> dict:
+    need = {inv.party_id for inv in rows if snapshot_incomplete(inv.owner_snapshot)}
+    return fetch_parties(settings.new_business_url, need)
+
+
+def _party_cache_for_disbursements(rows: list[ClaimDisbursement]) -> dict:
+    need = {d.party_id for d in rows if snapshot_incomplete(d.owner_snapshot)}
+    return fetch_parties(settings.new_business_url, need)
+
+
+def _invoice_out(inv: Invoice, cache: dict | None = None) -> InvoiceOut:
+    party_cache = cache if cache is not None else _party_cache_for_invoices([inv])
+    owner_snap = enrich_snapshot(inv.owner_snapshot, party_id=inv.party_id, cache=party_cache)
+    data = InvoiceOut.model_validate(inv)
+    data.owner = summary_from_snapshot(owner_snap, fallback_id=inv.party_id)
+    return data
+
+
+def _disbursement_out(d: ClaimDisbursement, cache: dict | None = None) -> DisbursementOut:
+    party_cache = cache if cache is not None else _party_cache_for_disbursements([d])
+    owner_snap = enrich_snapshot(d.owner_snapshot, party_id=d.party_id, cache=party_cache)
+    data = DisbursementOut.model_validate(d)
+    data.owner = summary_from_snapshot(owner_snap, fallback_id=d.party_id)
+    return data
 
 
 def _post_journal(
@@ -70,7 +98,9 @@ def list_invoices(db: Session = Depends(get_db), user: dict = Depends(auth)):
         if not party_id:
             raise HTTPException(403, "Policyholder account is not linked to a party")
         q = q.filter(Invoice.party_id == party_id)
-    return q.order_by(Invoice.created_at.desc()).limit(200).all()
+    rows = q.order_by(Invoice.created_at.desc()).limit(200).all()
+    cache = _party_cache_for_invoices(rows)
+    return [_invoice_out(inv, cache) for inv in rows]
 
 
 @router.get("/api/finance/invoices/{invoice_id}", response_model=InvoiceOut)
@@ -80,7 +110,7 @@ def get_invoice(invoice_id: str, db: Session = Depends(get_db), user: dict = Dep
         raise HTTPException(404, "Invoice not found")
     if _is_policyholder(user) and inv.party_id != _party_id(user):
         raise HTTPException(404, "Invoice not found")
-    return inv
+    return _invoice_out(inv)
 
 
 @router.post("/api/finance/invoices/{invoice_id}/pay", response_model=PaymentOut)
@@ -144,7 +174,9 @@ def pay_invoice(
 def list_disbursements(db: Session = Depends(get_db), user: dict = Depends(auth)):
     if _is_policyholder(user):
         raise HTTPException(403, "Insufficient role")
-    return db.query(ClaimDisbursement).order_by(ClaimDisbursement.created_at.desc()).limit(200).all()
+    rows = db.query(ClaimDisbursement).order_by(ClaimDisbursement.created_at.desc()).limit(200).all()
+    cache = _party_cache_for_disbursements(rows)
+    return [_disbursement_out(d, cache) for d in rows]
 
 
 @router.get("/api/finance/ledger", response_model=list[JournalEntryOut])

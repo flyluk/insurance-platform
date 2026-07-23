@@ -13,6 +13,8 @@ from app.schemas import ClaimCreate, ClaimDocumentOut, ClaimOut, ReserveUpdate, 
 from insurance_shared.auth import make_auth_dependency
 from insurance_shared.events import enqueue_event
 from insurance_shared.metrics import record_event
+from insurance_shared.parties import snapshot_incomplete, summary_from_snapshot
+from insurance_shared.party_client import enrich_snapshot, fetch_parties
 
 router = APIRouter(prefix="/api/claims", tags=["claims"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
@@ -76,12 +78,30 @@ def _document_counts(db: Session, claim_ids: list[str]) -> dict[str, int]:
     return {claim_id: count for claim_id, count in rows}
 
 
-def _claim_out(claim: Claim, document_count: int = 0) -> ClaimOut:
+def _party_cache_for_claims(claims: list[Claim]) -> dict:
+    need: set[str] = set()
+    for claim in claims:
+        owner_id = claim.party_id
+        insured_id = claim.insured_party_id or claim.party_id
+        if snapshot_incomplete(claim.owner_snapshot):
+            need.add(owner_id)
+        if snapshot_incomplete(claim.insured_snapshot):
+            need.add(insured_id)
+    return fetch_parties(settings.new_business_url, need)
+
+
+def _claim_out(claim: Claim, document_count: int = 0, cache: dict | None = None) -> ClaimOut:
+    owner_id = claim.party_id
+    insured_id = claim.insured_party_id or claim.party_id
+    party_cache = cache if cache is not None else _party_cache_for_claims([claim])
+    owner_snap = enrich_snapshot(claim.owner_snapshot, party_id=owner_id, cache=party_cache)
+    insured_snap = enrich_snapshot(claim.insured_snapshot, party_id=insured_id, cache=party_cache)
     return ClaimOut(
         id=claim.id,
         claim_number=claim.claim_number,
         policy_id=claim.policy_id,
         party_id=claim.party_id,
+        insured_party_id=insured_id,
         product_code=claim.product_code,
         status=claim.status,
         description=claim.description,
@@ -91,6 +111,8 @@ def _claim_out(claim: Claim, document_count: int = 0) -> ClaimOut:
         created_at=claim.created_at,
         updated_at=claim.updated_at,
         document_count=document_count,
+        owner=summary_from_snapshot(owner_snap, fallback_id=owner_id),
+        insured=summary_from_snapshot(insured_snap, fallback_id=insured_id),
     )
 
 
@@ -110,11 +132,14 @@ def open_claim(
     if policy.get("status") != "ACTIVE":
         raise HTTPException(400, "Policy must be ACTIVE to open a claim")
 
-    party_id = policy.get("party_id") or body.party_id
+    party_id = policy.get("owner_party_id") or policy.get("party_id") or body.party_id
+    insured_party_id = policy.get("insured_party_id") or party_id
     product_code = policy.get("product_code") or body.product_code
+    owner_snap = policy.get("owner") or {"id": party_id}
+    insured_snap = policy.get("insured") or {"id": insured_party_id}
     if _is_policyholder(user):
         linked = _require_party(user)
-        if policy.get("party_id") != linked:
+        if policy.get("party_id") != linked and policy.get("owner_party_id") != linked:
             raise HTTPException(403, "Cannot open a claim on another party's policy")
         party_id = linked
 
@@ -122,6 +147,9 @@ def open_claim(
         claim_number=f"CLM-{uuid.uuid4().hex[:8].upper()}",
         policy_id=body.policy_id,
         party_id=party_id,
+        insured_party_id=insured_party_id,
+        owner_snapshot=owner_snap if isinstance(owner_snap, dict) else {"id": party_id},
+        insured_snapshot=insured_snap if isinstance(insured_snap, dict) else {"id": insured_party_id},
         product_code=product_code,
         description=body.description,
         loss_date=body.loss_date,
@@ -143,7 +171,8 @@ def list_claims(db: Session = Depends(get_db), user: dict = Depends(auth)):
         q = q.filter(Claim.party_id == _require_party(user))
     claims = q.order_by(Claim.created_at.desc()).limit(200).all()
     counts = _document_counts(db, [c.id for c in claims])
-    return [_claim_out(c, counts.get(c.id, 0)) for c in claims]
+    cache = _party_cache_for_claims(claims)
+    return [_claim_out(c, counts.get(c.id, 0), cache) for c in claims]
 
 
 @router.get("/{claim_id}", response_model=ClaimOut)
@@ -294,6 +323,10 @@ def settle(claim_id: str, body: SettleIn, db: Session = Depends(get_db), _=Depen
             "claim_number": claim.claim_number,
             "policy_id": claim.policy_id,
             "party_id": claim.party_id,
+            "insured_party_id": claim.insured_party_id or claim.party_id,
+            "owner": claim.owner_snapshot or {"id": claim.party_id},
+            "insured": claim.insured_snapshot
+            or {"id": claim.insured_party_id or claim.party_id},
             "product_code": claim.product_code,
             "amount": body.settlement_amount,
         },

@@ -2,12 +2,15 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../components/AuthContext";
+import PartyDetails, { PartySummary } from "../components/PartyDetails";
+import { flattenRiskEntries } from "../utils/formatRisk";
 
 type Policy = {
   id: string;
   policy_number: string;
   application_id: string;
   party_id: string;
+  insured_party_id?: string | null;
   product_code: string;
   status: string;
   annual_premium: number;
@@ -18,6 +21,8 @@ type Policy = {
   cancellation_refund?: number | null;
   created_at: string;
   updated_at: string;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 type Endorsement = {
@@ -52,10 +57,10 @@ const CHANGE_TYPES = [
 
 function formatRisk(attrs: Record<string, unknown> | null | undefined) {
   if (!attrs || !Object.keys(attrs).length) return null;
-  return Object.entries(attrs).map(([key, value]) => (
-    <div key={key} className="detail-row">
-      <span className="muted">{key.replace(/_/g, " ")}</span>
-      <strong>{String(value)}</strong>
+  return flattenRiskEntries(attrs).map((row) => (
+    <div key={row.key} className="detail-row">
+      <span className="muted">{row.label}</span>
+      <strong className="risk-value">{row.value}</strong>
     </div>
   ));
 }
@@ -273,10 +278,6 @@ export default function PolicyDetail() {
               <strong className="mono">{policy.application_id}</strong>
             </div>
             <div className="detail-row">
-              <span className="muted">Party</span>
-              <strong className="mono">{policy.party_id}</strong>
-            </div>
-            <div className="detail-row">
               <span className="muted">Product</span>
               <strong>{policy.product_code}</strong>
             </div>
@@ -322,6 +323,14 @@ export default function PolicyDetail() {
         <div className="panel stack">
           <h3>Risk attributes</h3>
           <div className="detail-grid">{formatRisk(policy.risk_attributes) || <span className="muted">None</span>}</div>
+        </div>
+      </div>
+
+      <div className="panel stack">
+        <h3>Parties</h3>
+        <div className="party-pair">
+          <PartyDetails role="Owner" party={policy.owner} />
+          <PartyDetails role="Insured" party={policy.insured} />
         </div>
       </div>
 

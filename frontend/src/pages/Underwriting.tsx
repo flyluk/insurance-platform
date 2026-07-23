@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
+import PartyDetails, { PartyCell, PartySummary, partyLabel } from "../components/PartyDetails";
+import { flattenRiskEntries } from "../utils/formatRisk";
 
 type Case = {
   id: string;
   application_id: string;
   party_id: string;
+  insured_party_id?: string | null;
   product_code: string;
   status: string;
   annual_premium: number;
@@ -15,6 +18,8 @@ type Case = {
   reason: string | null;
   created_at: string;
   updated_at: string;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 type Policy = {
@@ -26,10 +31,10 @@ type Policy = {
 
 function formatRisk(attrs: Record<string, unknown> | null | undefined) {
   if (!attrs || !Object.keys(attrs).length) return null;
-  return Object.entries(attrs).map(([key, value]) => (
-    <div key={key} className="detail-row">
-      <span className="muted">{key.replace(/_/g, " ")}</span>
-      <strong>{String(value)}</strong>
+  return flattenRiskEntries(attrs).map((row) => (
+    <div key={row.key} className="detail-row">
+      <span className="muted">{row.label}</span>
+      <strong className="risk-value">{row.value}</strong>
     </div>
   ));
 }
@@ -104,6 +109,8 @@ export default function Underwriting() {
             <thead>
               <tr>
                 <th>Product</th>
+                <th>Owner</th>
+                <th>Insured</th>
                 <th>Premium</th>
                 <th>Reason</th>
                 <th />
@@ -117,6 +124,8 @@ export default function Underwriting() {
                       {c.product_code}
                     </button>
                   </td>
+                  <td><PartyCell party={c.owner} /></td>
+                  <td><PartyCell party={c.insured} /></td>
                   <td>{c.annual_premium}</td>
                   <td>{c.reason}</td>
                   <td className="row">
@@ -131,7 +140,7 @@ export default function Underwriting() {
               ))}
               {!queue.length && (
                 <tr>
-                  <td colSpan={4} className="muted">
+                  <td colSpan={6} className="muted">
                     No referrals waiting
                   </td>
                 </tr>
@@ -176,10 +185,11 @@ export default function Underwriting() {
                   <span className="muted">Application</span>
                   <strong className="mono">{selected.application_id}</strong>
                 </div>
-                <div className="detail-row">
-                  <span className="muted">Party</span>
-                  <strong className="mono">{selected.party_id}</strong>
-                </div>
+              </div>
+              <h4>Parties</h4>
+              <div className="party-pair">
+                <PartyDetails role="Owner" party={selected.owner} />
+                <PartyDetails role="Insured" party={selected.insured} />
               </div>
               <h4>Risk attributes</h4>
               <div className="detail-grid">{formatRisk(selected.risk_attributes) || <span className="muted">None</span>}</div>

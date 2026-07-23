@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import api from "../api/client";
 import { useAuth } from "../components/AuthContext";
+import PartyDetails, { PartySummary, partyLabel } from "../components/PartyDetails";
 
 type Policy = {
   id: string;
@@ -8,6 +9,8 @@ type Policy = {
   product_code: string;
   status: string;
   party_id: string;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 type Claim = {
@@ -19,6 +22,8 @@ type Claim = {
   description: string;
   loss_date: string;
   document_count?: number;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 type ClaimDocument = {
@@ -170,7 +175,7 @@ export default function Claims() {
               <option value="">Select…</option>
               {activePolicies.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.policy_number} ({p.product_code})
+                  {p.policy_number} ({p.product_code}) · insured {partyLabel(p.insured)}
                 </option>
               ))}
             </select>
@@ -240,6 +245,10 @@ export default function Claims() {
       {selected && (
         <div className="panel stack">
           <h3>Evidence · {selected.claim_number}</h3>
+          <div className="party-pair">
+            <PartyDetails role="Owner" party={selected.owner} compact />
+            <PartyDetails role="Insured" party={selected.insured} compact />
+          </div>
           <p className="muted">Upload photos, police reports, medical notes, or repair invoices (max 5 MB).</p>
           {canUpload ? (
             <form className="row" onSubmit={uploadDoc} style={{ alignItems: "flex-end" }}>

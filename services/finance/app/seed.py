@@ -7,6 +7,17 @@ from sqlalchemy.orm import Session
 from app.models import Invoice, JournalEntry, JournalLine
 from insurance_shared.demo import DEMO_INVOICE_ID, DEMO_PARTY_ID, DEMO_POLICY_ID
 
+DEMO_OWNER_SNAP = {
+    "id": DEMO_PARTY_ID,
+    "full_name": "Alex Rivera",
+    "email": "policyholder@insurance.local",
+    "phone": "+1-555-0100",
+    "date_of_birth": "1990-04-12",
+    "address": "1200 Meridian Ave, Austin, TX 78701",
+    "id_number": "DRV-DEMO-1001",
+    "gender": "unspecified",
+}
+
 
 def seed_demo_invoice(db: Session) -> None:
     open_inv = (
@@ -15,6 +26,9 @@ def seed_demo_invoice(db: Session) -> None:
         .first()
     )
     if open_inv:
+        if not open_inv.owner_snapshot:
+            open_inv.owner_snapshot = DEMO_OWNER_SNAP
+            db.commit()
         return
 
     invoice_id = DEMO_INVOICE_ID if not db.get(Invoice, DEMO_INVOICE_ID) else str(uuid.uuid4())
@@ -23,6 +37,7 @@ def seed_demo_invoice(db: Session) -> None:
         invoice_number=f"INV-DEMO-{uuid.uuid4().hex[:4].upper()}",
         policy_id=DEMO_POLICY_ID,
         party_id=DEMO_PARTY_ID,
+        owner_snapshot=DEMO_OWNER_SNAP,
         invoice_type="PREMIUM",
         amount=864.0,
         status="OPEN",

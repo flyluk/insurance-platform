@@ -3,6 +3,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from insurance_shared.parties import PartySummary
+
 Decision = Literal["ACCEPT", "REFER", "DECLINE"]
 
 
@@ -10,6 +12,7 @@ class CaseOut(BaseModel):
     id: str
     application_id: str
     party_id: str
+    insured_party_id: str | None = None
     product_code: str
     annual_premium: float
     risk_attributes: dict[str, Any]
@@ -19,6 +22,8 @@ class CaseOut(BaseModel):
     reason: str | None
     created_at: datetime
     updated_at: datetime
+    owner: PartySummary | None = None
+    insured: PartySummary | None = None
 
     model_config = {"from_attributes": True}
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
+import { PartyCell, PartySummary } from "../components/PartyDetails";
 
 type Invoice = {
   id: string;
@@ -8,12 +9,16 @@ type Invoice = {
   amount: number;
   status: string;
   description: string | null;
+  owner?: PartySummary | null;
+  party_id?: string;
 };
 type Disbursement = {
   id: string;
   claim_number: string;
   amount: number;
   status: string;
+  owner?: PartySummary | null;
+  party_id?: string;
 };
 type Journal = {
   id: string;
@@ -59,6 +64,7 @@ export default function Finance() {
           <thead>
             <tr>
               <th>Number</th>
+              <th>Owner</th>
               <th>Type</th>
               <th>Amount</th>
               <th>Status</th>
@@ -69,6 +75,7 @@ export default function Finance() {
             {invoices.map((inv) => (
               <tr key={inv.id}>
                 <td>{inv.invoice_number}</td>
+                <td><PartyCell party={inv.owner} /></td>
                 <td>{inv.invoice_type}</td>
                 <td>{inv.amount}</td>
                 <td>
@@ -94,6 +101,7 @@ export default function Finance() {
           <thead>
             <tr>
               <th>Claim</th>
+              <th>Owner</th>
               <th>Amount</th>
               <th>Status</th>
             </tr>
@@ -102,6 +110,7 @@ export default function Finance() {
             {disbursements.map((d) => (
               <tr key={d.id}>
                 <td>{d.claim_number}</td>
+                <td><PartyCell party={d.owner} /></td>
                 <td>{d.amount}</td>
                 <td>
                   <span className="badge">{d.status}</span>

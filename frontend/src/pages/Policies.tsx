@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
+import { PartyCell, PartySummary } from "../components/PartyDetails";
 
 type Policy = {
   id: string;
@@ -9,8 +10,11 @@ type Policy = {
   status: string;
   annual_premium: number;
   party_id: string;
+  insured_party_id?: string | null;
   effective_date: string;
   expiry_date: string;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 export default function Policies() {
@@ -37,6 +41,8 @@ export default function Policies() {
             <tr>
               <th>Number</th>
               <th>Product</th>
+              <th>Owner</th>
+              <th>Insured</th>
               <th>Status</th>
               <th>Premium</th>
               <th>Term</th>
@@ -52,6 +58,8 @@ export default function Policies() {
                   </Link>
                 </td>
                 <td>{p.product_code}</td>
+                <td><PartyCell party={p.owner} /></td>
+                <td><PartyCell party={p.insured} /></td>
                 <td>
                   <span className={`badge ${p.status !== "ACTIVE" ? "bad" : ""}`}>{p.status}</span>
                 </td>
@@ -68,7 +76,7 @@ export default function Policies() {
             ))}
             {!policies.length && (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={8} className="muted">
                   No policies yet
                 </td>
               </tr>

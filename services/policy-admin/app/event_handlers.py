@@ -32,10 +32,16 @@ def handle_domain_event(event: dict) -> None:
             existing = db.query(Policy).filter(Policy.application_id == app_id).first()
             if not existing:
                 now = datetime.now(timezone.utc)
+                owner_id = payload.get("owner_party_id") or payload["party_id"]
+                insured_id = payload.get("insured_party_id") or owner_id
                 policy = Policy(
                     policy_number=_policy_number(payload["product_code"]),
                     application_id=app_id,
-                    party_id=payload["party_id"],
+                    party_id=owner_id,
+                    owner_party_id=owner_id,
+                    insured_party_id=insured_id,
+                    owner_snapshot=payload.get("owner") or {"id": owner_id},
+                    insured_snapshot=payload.get("insured") or {"id": insured_id},
                     product_code=payload["product_code"],
                     status="ACTIVE",
                     annual_premium=float(payload["annual_premium"]),

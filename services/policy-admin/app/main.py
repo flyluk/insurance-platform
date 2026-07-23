@@ -43,6 +43,10 @@ def _ensure_lifecycle_columns() -> None:
         "ALTER TABLE policies ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ",
         "ALTER TABLE policies ADD COLUMN IF NOT EXISTS cancellation_refund DOUBLE PRECISION",
         "ALTER TABLE endorsements ADD COLUMN IF NOT EXISTS billed_amount DOUBLE PRECISION DEFAULT 0",
+        "ALTER TABLE policies ADD COLUMN IF NOT EXISTS owner_party_id VARCHAR(36)",
+        "ALTER TABLE policies ADD COLUMN IF NOT EXISTS insured_party_id VARCHAR(36)",
+        "ALTER TABLE policies ADD COLUMN IF NOT EXISTS owner_snapshot JSONB DEFAULT '{}'::jsonb",
+        "ALTER TABLE policies ADD COLUMN IF NOT EXISTS insured_snapshot JSONB DEFAULT '{}'::jsonb",
     ]
     with engine.begin() as conn:
         for stmt in statements:

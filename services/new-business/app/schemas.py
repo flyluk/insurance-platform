@@ -2,29 +2,38 @@ from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
+from insurance_shared.parties import PartySummary
 
 ProductCode = Literal["AUTO", "HOME", "LIFE"]
 
 
 class PartyCreate(BaseModel):
+    full_name: str = Field(min_length=1)
+    email: str = Field(min_length=1)
+    phone: str = Field(min_length=1)
+    date_of_birth: str = Field(min_length=1)
+    address: str = Field(min_length=1)
+    id_number: str = Field(min_length=1)
+    gender: str = Field(min_length=1)
+
+
+class PartyOut(BaseModel):
+    id: str
     full_name: str
-    email: str
+    email: str = ""
     phone: str | None = None
     date_of_birth: str | None = None
     address: str | None = None
     id_number: str | None = None
     gender: str | None = None
-
-
-class PartyOut(PartyCreate):
-    id: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
 class QuoteCreate(BaseModel):
-    party_id: str
+    party_id: str  # policy owner / payer
+    insured_party_id: str | None = None  # defaults to owner when omitted
     product_code: ProductCode
     plan_id: str
     rider_ids: list[str] = Field(default_factory=list)
@@ -34,6 +43,7 @@ class QuoteCreate(BaseModel):
 class QuoteOut(BaseModel):
     id: str
     party_id: str
+    insured_party_id: str | None = None
     product_code: str
     plan_id: str | None = None
     rider_ids: list[str] = Field(default_factory=list)
@@ -43,6 +53,8 @@ class QuoteOut(BaseModel):
     currency: str
     created_at: datetime
     updated_at: datetime
+    owner: PartySummary | None = None
+    insured: PartySummary | None = None
 
     model_config = {"from_attributes": True}
 
@@ -56,6 +68,7 @@ class ApplicationOut(BaseModel):
     id: str
     quote_id: str
     party_id: str
+    insured_party_id: str | None = None
     product_code: str
     status: str
     risk_attributes: dict[str, Any]
@@ -65,6 +78,8 @@ class ApplicationOut(BaseModel):
     policy_id: str | None
     created_at: datetime
     updated_at: datetime
+    owner: PartySummary | None = None
+    insured: PartySummary | None = None
 
     model_config = {"from_attributes": True}
 

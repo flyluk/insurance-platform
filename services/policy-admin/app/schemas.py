@@ -3,12 +3,16 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from insurance_shared.parties import PartySummary
+
 
 class PolicyOut(BaseModel):
     id: str
     policy_number: str
     application_id: str
     party_id: str
+    owner_party_id: str | None = None
+    insured_party_id: str | None = None
     product_code: str
     status: str
     annual_premium: float
@@ -19,6 +23,8 @@ class PolicyOut(BaseModel):
     cancellation_refund: float | None = None
     created_at: datetime
     updated_at: datetime
+    owner: PartySummary | None = None
+    insured: PartySummary | None = None
 
     model_config = {"from_attributes": True}
 

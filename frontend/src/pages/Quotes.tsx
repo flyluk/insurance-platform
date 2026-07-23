@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import api from "../api/client";
+import { PartyCell, PartySummary } from "../components/PartyDetails";
 
 type Party = {
   id: string;
@@ -15,11 +16,14 @@ type Party = {
 type Quote = {
   id: string;
   party_id: string;
+  insured_party_id?: string | null;
   product_code: string;
   plan_id?: string | null;
   rider_ids?: string[];
   status: string;
   annual_premium: number | null;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 type RiskField = {
@@ -60,6 +64,8 @@ type Application = {
   status: string;
   annual_premium: number;
   uw_decision: string | null;
+  owner?: PartySummary | null;
+  insured?: PartySummary | null;
 };
 
 function defaultsFromSchema(schema: RiskField[]): Record<string, unknown> {
@@ -71,7 +77,6 @@ function defaultsFromSchema(schema: RiskField[]): Record<string, unknown> {
 }
 
 export default function Quotes() {
-  const [parties, setParties] = useState<Party[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [apps, setApps] = useState<Application[]>([]);
   const [name, setName] = useState("");
@@ -81,7 +86,10 @@ export default function Quotes() {
   const [idNumber, setIdNumber] = useState("");
   const [gender, setGender] = useState("");
   const [phone, setPhone] = useState("");
-  const [partyId, setPartyId] = useState("");
+  const [searchHits, setSearchHits] = useState<Party[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Party | null>(null);
   const [product, setProduct] = useState("AUTO");
   const [plans, setPlans] = useState<ProductPlan[]>([]);
   const [planId, setPlanId] = useState("");
@@ -90,15 +98,12 @@ export default function Quotes() {
   const [msg, setMsg] = useState("");
 
   async function refresh() {
-    const [p, q, a] = await Promise.all([
-      api.get("/nb/parties"),
+    const [q, a] = await Promise.all([
       api.get("/nb/quotes"),
       api.get("/nb/applications"),
     ]);
-    setParties(p.data);
     setQuotes(q.data);
     setApps(a.data);
-    if (!partyId && p.data[0]) setPartyId(p.data[0].id);
   }
 
   useEffect(() => {
@@ -141,17 +146,69 @@ export default function Quotes() {
     }
   }, [planId]);
 
-  async function createParty(e: FormEvent) {
+  function selectExisting(party: Party) {
+    setSelectedClient(party);
+    setMsg(`Using existing client ${party.full_name}`);
+  }
+
+  async function searchClients(e: FormEvent) {
     e.preventDefault();
-    await api.post("/nb/parties", {
-      full_name: name,
-      email,
-      date_of_birth: dob || null,
-      address: address || null,
-      id_number: idNumber || null,
-      gender: gender || null,
-      phone: phone || null,
+    if (!name.trim()) {
+      setMsg("Name is required to search");
+      return;
+    }
+    setSearchBusy(true);
+    setMsg("");
+    try {
+      const { data } = await api.get("/nb/clients/search", {
+        params: { name: name.trim() },
+      });
+      const hits = Array.isArray(data) ? data : [];
+      setSearchHits(hits);
+      setSearched(true);
+      if (!hits.length) {
+        setMsg("No matching clients — create a new one below");
+      } else {
+        setMsg(`Found ${hits.length} client${hits.length === 1 ? "" : "s"}`);
+      }
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (err instanceof Error ? err.message : "Search failed");
+      setMsg(String(detail));
+    } finally {
+      setSearchBusy(false);
+    }
+  }
+
+  async function createNewClient(e: FormEvent) {
+    e.preventDefault();
+    const missing = [
+      !name.trim() && "full name",
+      !email.trim() && "email",
+      !dob && "date of birth",
+      !address.trim() && "address",
+      !idNumber.trim() && "ID number",
+      !gender && "gender",
+      !phone.trim() && "contact number",
+    ].filter(Boolean);
+    if (missing.length) {
+      setMsg(`Create new client requires: ${missing.join(", ")}`);
+      return;
+    }
+    const { data } = await api.post("/nb/parties", {
+      full_name: name.trim(),
+      email: email.trim(),
+      date_of_birth: dob,
+      address: address.trim(),
+      id_number: idNumber.trim(),
+      gender,
+      phone: phone.trim(),
     });
+    setSelectedClient(data);
+    setMsg(`Created client ${data.full_name}`);
+    setSearchHits([]);
+    setSearched(false);
     setName("");
     setEmail("");
     setDob("");
@@ -164,12 +221,17 @@ export default function Quotes() {
 
   async function createQuote(e: FormEvent) {
     e.preventDefault();
+    if (!selectedClient) {
+      setMsg("Select a matched client or create a new client first");
+      return;
+    }
     if (!planId) {
       setMsg("Select a published basic plan");
       return;
     }
     await api.post("/nb/quotes", {
-      party_id: partyId,
+      party_id: selectedClient.id,
+      insured_party_id: selectedClient.id,
       product_code: product,
       plan_id: planId,
       rider_ids: selectedRiders,
@@ -204,70 +266,161 @@ export default function Quotes() {
     <div className="stack">
       <div className="hero">
         <h1>New Business</h1>
-        <p>Create parties, rate multi-product quotes, and submit applications.</p>
+        <p>Search or create clients, rate multi-product quotes, and submit applications.</p>
       </div>
       {msg && <div className="muted">{msg}</div>}
       <div className="grid-2">
-        <form className="panel stack" onSubmit={createParty}>
-          <h3>New party</h3>
-          <label>
-            Full name
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
-          </label>
-          <label>
-            Email
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
-          </label>
-          <label>
-            Date of birth
-            <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" />
-          </label>
-          <label>
-            Address
-            <textarea
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              rows={2}
-              placeholder="Street, city, postal code"
-            />
-          </label>
-          <label>
-            ID number
-            <input value={idNumber} onChange={(e) => setIdNumber(e.target.value)} placeholder="National ID / passport" />
-          </label>
-          <label>
-            Gender
-            <select value={gender} onChange={(e) => setGender(e.target.value)}>
-              <option value="">Select…</option>
-              <option value="female">Female</option>
-              <option value="male">Male</option>
-            </select>
-          </label>
-          <label>
-            Contact number
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              type="tel"
-              placeholder="+1 555 0100"
-            />
-          </label>
-          <button className="btn" type="submit">
-            Save party
-          </button>
-        </form>
+        <div className="panel stack">
+          <form className="stack" onSubmit={searchClients}>
+            <h3>Client search</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Search existing clients by full name only.
+            </p>
+            <label>
+              Full name
+              <input
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setSearched(false);
+                  setSearchHits([]);
+                }}
+                required
+              />
+            </label>
+            <button className="btn" type="submit" disabled={searchBusy}>
+              {searchBusy ? "Searching…" : "Search clients"}
+            </button>
+          </form>
+
+          {searched && (
+            <div className="stack">
+              <h4 style={{ margin: 0 }}>
+                Matches{searchHits.length ? ` (${searchHits.length})` : ""}
+              </h4>
+              {searchHits.length === 0 && <p className="muted">No existing clients matched.</p>}
+              {searchHits.length > 0 && (
+                <div className="client-match-scroll">
+                  {searchHits.map((p) => (
+                    <div key={p.id} className="party-card">
+                      <div className="party-name">{p.full_name}</div>
+                      <div className="party-fields">
+                        <div className="party-field">
+                          <span className="party-field-label">Email</span>
+                          <span className="party-field-value">{p.email || "—"}</span>
+                        </div>
+                        <div className="party-field">
+                          <span className="party-field-label">DOB</span>
+                          <span className="party-field-value">{p.date_of_birth || "—"}</span>
+                        </div>
+                        <div className="party-field">
+                          <span className="party-field-label">Address</span>
+                          <span className="party-field-value">{p.address || "—"}</span>
+                        </div>
+                        {p.phone && (
+                          <div className="party-field">
+                            <span className="party-field-label">Phone</span>
+                            <span className="party-field-value">{p.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="row" style={{ marginTop: "0.65rem" }}>
+                        <button className="btn" type="button" onClick={() => selectExisting(p)}>
+                          Use existing client
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <form className="stack" onSubmit={(e) => createNewClient(e).catch(console.error)}>
+            <h4>Create new client</h4>
+            <p className="muted" style={{ margin: 0 }}>
+              Uses the full name from search. Email and all other details are required.
+            </p>
+            <label>
+              Email
+              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+            </label>
+            <label>
+              Date of birth
+              <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" required />
+            </label>
+            <label>
+              Address
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                rows={2}
+                placeholder="Street, city, postal code"
+                required
+              />
+            </label>
+            <label>
+              ID number
+              <input
+                value={idNumber}
+                onChange={(e) => setIdNumber(e.target.value)}
+                placeholder="National ID / passport"
+                required
+              />
+            </label>
+            <label>
+              Gender
+              <select value={gender} onChange={(e) => setGender(e.target.value)} required>
+                <option value="">Select…</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+              </select>
+            </label>
+            <label>
+              Contact number
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                type="tel"
+                placeholder="+1 555 0100"
+                required
+              />
+            </label>
+            <button className="btn warn" type="submit">
+              Create new client
+            </button>
+          </form>
+        </div>
         <form className="panel stack" onSubmit={createQuote}>
           <h3>New quote</h3>
-          <label>
-            Party
-            <select value={partyId} onChange={(e) => setPartyId(e.target.value)} required>
-              {parties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.full_name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {selectedClient ? (
+            <div className="party-card compact">
+              <div className="party-name">{selectedClient.full_name}</div>
+              <div className="party-fields">
+                <div className="party-field">
+                  <span className="party-field-label">Email</span>
+                  <span className="party-field-value">{selectedClient.email || "—"}</span>
+                </div>
+                <div className="party-field">
+                  <span className="party-field-label">DOB</span>
+                  <span className="party-field-value">{selectedClient.date_of_birth || "—"}</span>
+                </div>
+                <div className="party-field">
+                  <span className="party-field-label">Address</span>
+                  <span className="party-field-value">{selectedClient.address || "—"}</span>
+                </div>
+              </div>
+              <div className="row" style={{ marginTop: "0.5rem" }}>
+                <button className="btn ghost" type="button" onClick={() => setSelectedClient(null)}>
+                  Clear client
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>
+              Choose a matched client or create a new client first.
+            </p>
+          )}
           <label>
             Product
             <select value={product} onChange={(e) => setProduct(e.target.value)}>
@@ -365,7 +518,7 @@ export default function Quotes() {
             );
           })}
 
-          <button className="btn" type="submit">
+          <button className="btn" type="submit" disabled={!selectedClient}>
             Create quote
           </button>
         </form>
@@ -376,6 +529,8 @@ export default function Quotes() {
           <thead>
             <tr>
               <th>Product</th>
+              <th>Owner</th>
+              <th>Insured</th>
               <th>Status</th>
               <th>Premium</th>
               <th />
@@ -385,6 +540,8 @@ export default function Quotes() {
             {quotes.map((q) => (
               <tr key={q.id}>
                 <td>{q.product_code}</td>
+                <td><PartyCell party={q.owner} /></td>
+                <td><PartyCell party={q.insured} /></td>
                 <td>
                   <span className="badge">{q.status}</span>
                 </td>
@@ -412,6 +569,8 @@ export default function Quotes() {
           <thead>
             <tr>
               <th>Product</th>
+              <th>Owner</th>
+              <th>Insured</th>
               <th>Status</th>
               <th>UW</th>
               <th>Premium</th>
@@ -421,6 +580,8 @@ export default function Quotes() {
             {apps.map((a) => (
               <tr key={a.id}>
                 <td>{a.product_code}</td>
+                <td><PartyCell party={a.owner} /></td>
+                <td><PartyCell party={a.insured} /></td>
                 <td>
                   <span className="badge">{a.status}</span>
                 </td>

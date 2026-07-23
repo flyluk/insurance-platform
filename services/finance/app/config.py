@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://insurance:insurancepass@postgres:5432/finance_db"
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
+    new_business_url: str = "http://new-business:8000"
 
     db_pool_size: int = 5
     db_max_overflow: int = 8
