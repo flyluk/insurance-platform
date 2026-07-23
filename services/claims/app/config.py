@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     db_pool_recycle: int = 1800
     uvicorn_workers: int = 1
     outbox_poll_seconds: float = 2.0
+    # Claim document uploads (stored in Postgres BYTEA for multi-replica demos)
+    max_document_bytes: int = 5 * 1024 * 1024  # 5 MB
+    allowed_document_types: str = (
+        "image/jpeg,image/png,image/webp,application/pdf,"
+        "image/heic,text/plain"
+    )
 
 
 settings = Settings()

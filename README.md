@@ -82,7 +82,7 @@ Redeploy after code changes:
 1. Sign in as **agent** → create party → pick published plan (+ riders) → rate → submit  
 2. Sign in as **underwriter** → decide referrals (auto-accept/decline may already bind)  
 3. **Policies** appear when UW accepts → renew / cancel (policy change is **admin** only)  
-4. **Claims** → open FNOL on an active policy → settle (triggers finance disbursement)  
+4. **Claims** → open FNOL on an active policy → attach evidence documents → settle (triggers finance disbursement)  
 5. **Finance** → pay premium invoices → view ledger  
 6. Sign in to **Product Studio** as **product** → manage plans/riders → publish for quoting  
 7. Sign in to **Policyholder portal** as **policyholder** → view policy → pay invoice (CARD/ACH) → file a claim  
@@ -95,6 +95,17 @@ Self-serve collections use a **simulated processor** (no external PSP):
 - **ACH** — requires account name, account number, 9-digit routing; routing `000000000` is declined
 - Full PAN/account numbers are never stored; only a processor reference and masked last-4 are kept
 - Staff Finance can still record payments without instrument details
+
+### Claim documents
+
+Staff and policyholders can attach evidence to a claim (`PHOTO`, `POLICE_REPORT`, `MEDICAL`, `INVOICE`, `OTHER`):
+
+- `POST /api/claims/{id}/documents` — multipart upload (`file` + `category`)
+- `GET /api/claims/{id}/documents` — list metadata
+- `GET /api/claims/{id}/documents/{doc_id}` — download bytes
+- `DELETE /api/claims/{id}/documents/{doc_id}` — staff/admin only
+- Stored in Postgres (`BYTEA`) so multi-replica claims pods share evidence without object storage
+- Max **5 MB**; allowed types: JPEG, PNG, WebP, PDF, plain text
 
 ## Observability
 
