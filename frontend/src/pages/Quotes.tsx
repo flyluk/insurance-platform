@@ -87,6 +87,9 @@ export default function Quotes() {
   const [idNumber, setIdNumber] = useState("");
   const [gender, setGender] = useState("");
   const [phone, setPhone] = useState("");
+  const [searchHits, setSearchHits] = useState<Party[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [searchBusy, setSearchBusy] = useState(false);
   const [partyId, setPartyId] = useState("");
   const [insuredPartyId, setInsuredPartyId] = useState("");
   const [product, setProduct] = useState("AUTO");
@@ -149,17 +152,58 @@ export default function Quotes() {
     }
   }, [planId]);
 
-  async function createParty(e: FormEvent) {
+  function selectExisting(party: Party) {
+    setPartyId(party.id);
+    setInsuredPartyId(party.id);
+    setMsg(`Using existing client ${party.full_name}`);
+  }
+
+  async function searchClients(e: FormEvent) {
     e.preventDefault();
-    await api.post("/nb/parties", {
-      full_name: name,
-      email,
+    if (!name.trim() || !email.trim()) {
+      setMsg("Name and email are required to search");
+      return;
+    }
+    setSearchBusy(true);
+    setMsg("");
+    try {
+      const { data } = await api.get("/nb/parties/search", {
+        params: { name: name.trim(), email: email.trim() },
+      });
+      setSearchHits(data);
+      setSearched(true);
+      if (!data.length) {
+        setMsg("No matching clients — you can force create a new one");
+      }
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (err instanceof Error ? err.message : "Search failed");
+      setMsg(String(detail));
+    } finally {
+      setSearchBusy(false);
+    }
+  }
+
+  async function forceCreateParty() {
+    if (!name.trim() || !email.trim()) {
+      setMsg("Name and email are required to create a client");
+      return;
+    }
+    const { data } = await api.post("/nb/parties", {
+      full_name: name.trim(),
+      email: email.trim(),
       date_of_birth: dob || null,
       address: address || null,
       id_number: idNumber || null,
       gender: gender || null,
       phone: phone || null,
     });
+    setPartyId(data.id);
+    setInsuredPartyId(data.id);
+    setMsg(`Created client ${data.full_name}`);
+    setSearchHits([]);
+    setSearched(false);
     setName("");
     setEmail("");
     setDob("");
@@ -213,20 +257,85 @@ export default function Quotes() {
     <div className="stack">
       <div className="hero">
         <h1>New Business</h1>
-        <p>Create parties, rate multi-product quotes, and submit applications.</p>
+        <p>Search or create clients, rate multi-product quotes, and submit applications.</p>
       </div>
       {msg && <div className="muted">{msg}</div>}
       <div className="grid-2">
-        <form className="panel stack" onSubmit={createParty}>
-          <h3>New party</h3>
+        <form className="panel stack" onSubmit={searchClients}>
+          <h3>Client search</h3>
+          <p className="muted" style={{ margin: 0 }}>
+            Search existing clients by name and email before creating a new one.
+          </p>
           <label>
             Full name
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
+            <input
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setSearched(false);
+                setSearchHits([]);
+              }}
+              required
+            />
           </label>
           <label>
             Email
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+            <input
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setSearched(false);
+                setSearchHits([]);
+              }}
+              type="email"
+              required
+            />
           </label>
+          <button className="btn" type="submit" disabled={searchBusy}>
+            {searchBusy ? "Searching…" : "Search clients"}
+          </button>
+
+          {searched && (
+            <div className="stack">
+              <h4>Matches</h4>
+              {searchHits.length === 0 && <p className="muted">No existing clients matched.</p>}
+              {searchHits.map((p) => (
+                <div key={p.id} className="party-card">
+                  <div className="party-name">{p.full_name}</div>
+                  <div className="party-fields">
+                    <div className="party-field">
+                      <span className="party-field-label">Email</span>
+                      <span className="party-field-value">{p.email}</span>
+                    </div>
+                    <div className="party-field">
+                      <span className="party-field-label">DOB</span>
+                      <span className="party-field-value">{p.date_of_birth || "—"}</span>
+                    </div>
+                    <div className="party-field">
+                      <span className="party-field-label">Address</span>
+                      <span className="party-field-value">{p.address || "—"}</span>
+                    </div>
+                    {p.phone && (
+                      <div className="party-field">
+                        <span className="party-field-label">Phone</span>
+                        <span className="party-field-value">{p.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="row" style={{ marginTop: "0.65rem" }}>
+                    <button className="btn" type="button" onClick={() => selectExisting(p)}>
+                      Use existing client
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <h4>Create new client</h4>
+          <p className="muted" style={{ margin: 0 }}>
+            Optional details for a new record. Use Force create even if matches were found.
+          </p>
           <label>
             Date of birth
             <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" />
@@ -261,8 +370,8 @@ export default function Quotes() {
               placeholder="+1 555 0100"
             />
           </label>
-          <button className="btn" type="submit">
-            Save party
+          <button className="btn warn" type="button" onClick={() => forceCreateParty().catch(console.error)}>
+            Force create
           </button>
         </form>
         <form className="panel stack" onSubmit={createQuote}>

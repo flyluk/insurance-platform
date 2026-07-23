@@ -81,6 +81,30 @@ def list_parties(db: Session = Depends(get_db), user: dict = Depends(auth)):
     return db.query(Party).order_by(Party.created_at.desc()).limit(200).all()
 
 
+@router.get("/parties/search", response_model=list[PartyOut])
+def search_parties(
+    name: str,
+    email: str,
+    db: Session = Depends(get_db),
+    _=Depends(agent_auth),
+):
+    """Find existing clients by name + email before creating a duplicate."""
+    name_q = (name or "").strip()
+    email_q = (email or "").strip()
+    if not name_q or not email_q:
+        raise HTTPException(400, "Name and email are required for client search")
+    return (
+        db.query(Party)
+        .filter(
+            Party.full_name.ilike(f"%{name_q}%"),
+            Party.email.ilike(f"%{email_q}%"),
+        )
+        .order_by(Party.full_name)
+        .limit(50)
+        .all()
+    )
+
+
 @router.get("/parties/{party_id}", response_model=PartyOut)
 def get_party(party_id: str, db: Session = Depends(get_db), user: dict = Depends(auth)):
     if user.get("role") == "policyholder":
