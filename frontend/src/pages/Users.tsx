@@ -1,8 +1,9 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../components/AuthContext";
 import Pagination, { usePagination } from "../components/Pagination";
+import Tabs from "../components/Tabs";
 
 const ROLES = [
   "admin",
@@ -13,6 +14,10 @@ const ROLES = [
   "product",
   "policyholder",
 ] as const;
+
+const STAFF_ROLES = new Set(["admin", "agent", "underwriter", "claims", "finance", "product"]);
+
+type UsersTab = "staff" | "clients";
 
 type UserRow = {
   id: string;
@@ -59,6 +64,7 @@ export default function Users() {
   const navigate = useNavigate();
   const { user: currentUser, adoptSession } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [tab, setTab] = useState<UsersTab>("staff");
   const [msg, setMsg] = useState("");
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [form, setForm] = useState<EditForm>(emptyForm());
@@ -175,21 +181,37 @@ export default function Users() {
     }
   }
 
-  const page = usePagination(users);
+  const staffUsers = useMemo(
+    () => users.filter((u) => STAFF_ROLES.has(u.role)),
+    [users],
+  );
+  const clientUsers = useMemo(
+    () => users.filter((u) => u.role === "policyholder"),
+    [users],
+  );
+  const visibleUsers = tab === "staff" ? staffUsers : clientUsers;
+  const page = usePagination(visibleUsers);
 
   return (
     <div className="stack">
       <div className="hero">
         <h1>Users</h1>
         <p>
-          Manage accounts and login as admin, agent, underwriter, claims, finance, and other roles
-          without their passwords.
+          Manage staff and client accounts. Login as admin, agent, and other roles without their
+          passwords.
         </p>
       </div>
       {msg && <div className="muted">{msg}</div>}
 
       <div className="panel stack">
-        <h3 style={{ margin: 0 }}>All users ({users.length})</h3>
+        <Tabs
+          active={tab}
+          onChange={(id) => setTab(id as UsersTab)}
+          tabs={[
+            { id: "staff", label: "Staff", count: staffUsers.length },
+            { id: "clients", label: "Clients", count: clientUsers.length },
+          ]}
+        />
         <table>
           <thead>
             <tr>
@@ -197,7 +219,7 @@ export default function Users() {
               <th>Email</th>
               <th>Role</th>
               <th>Active</th>
-              <th>Party ID</th>
+              {tab === "clients" && <th>Party ID</th>}
               <th />
             </tr>
           </thead>
@@ -218,7 +240,7 @@ export default function Users() {
                     {u.is_active ? "Yes" : "No"}
                   </span>
                 </td>
-                <td className="mono muted">{u.party_id || "—"}</td>
+                {tab === "clients" && <td className="mono muted">{u.party_id || "—"}</td>}
                 <td className="row">
                   <button
                     className="btn"
@@ -234,10 +256,10 @@ export default function Users() {
                 </td>
               </tr>
             ))}
-            {!users.length && (
+            {!visibleUsers.length && (
               <tr>
-                <td colSpan={6} className="muted">
-                  No users found.
+                <td colSpan={tab === "clients" ? 6 : 5} className="muted">
+                  {tab === "staff" ? "No staff users found." : "No client users found."}
                 </td>
               </tr>
             )}
