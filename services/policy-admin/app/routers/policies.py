@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -186,10 +187,23 @@ def consume_event(body: DomainEventIn, db: Session = Depends(get_db)):
 
 
 @router.get("/api/policies", response_model=list[PolicyOut])
-def list_policies(db: Session = Depends(get_db), user: dict = Depends(auth)):
+def list_policies(
+    party_id: str | None = None,
+    db: Session = Depends(get_db),
+    user: dict = Depends(auth),
+):
     q = db.query(Policy)
     if _is_policyholder(user):
         q = q.filter(Policy.party_id == _require_party(user))
+    elif party_id:
+        # Staff: policies where the party is owner or insured
+        q = q.filter(
+            or_(
+                Policy.party_id == party_id,
+                Policy.owner_party_id == party_id,
+                Policy.insured_party_id == party_id,
+            )
+        )
     policies = q.order_by(Policy.created_at.desc()).limit(200).all()
     cache = _party_cache_for_policies(policies)
     return [_policy_out(p, cache) for p in policies]

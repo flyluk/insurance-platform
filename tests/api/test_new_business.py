@@ -120,3 +120,41 @@ def test_search_parties_by_name(api_client, agent_headers):
         params={"name": ""},
     )
     assert bad.status_code == 400
+
+
+def test_search_clients_optional_filters(api_client, agent_headers):
+    """Optional email / ID / DOB narrow client search; name remains required."""
+    email = unique_email("filter")
+    payload = party_create_payload(
+        f"Filterable Client {email.split('@')[0]}",
+        email=email,
+        id_number="ID-FILTER-99",
+        date_of_birth="1988-07-04",
+    )
+    created = api_client.post("/api/nb/parties", headers=agent_headers, json=payload)
+    assert created.status_code == 200, created.text
+    party_id = created.json()["id"]
+
+    hit = api_client.get(
+        "/api/nb/clients/search",
+        headers=agent_headers,
+        params={
+            "name": "Filterable Client",
+            "email": email,
+            "id_number": "FILTER-99",
+            "date_of_birth": "1988-07-04",
+        },
+    )
+    assert hit.status_code == 200
+    assert party_id in {p["id"] for p in hit.json()}
+
+    miss = api_client.get(
+        "/api/nb/clients/search",
+        headers=agent_headers,
+        params={
+            "name": "Filterable Client",
+            "email": "nobody@example.com",
+        },
+    )
+    assert miss.status_code == 200
+    assert party_id not in {p["id"] for p in miss.json()}

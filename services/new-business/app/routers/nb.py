@@ -17,6 +17,9 @@ from insurance_shared.parties import party_snapshot, summary_from_snapshot
 router = APIRouter(prefix="/api/nb", tags=["new-business"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
 agent_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "agent", "admin")
+client_search_auth = make_auth_dependency(
+    settings.jwt_secret, settings.jwt_algorithm, "agent", "claims", "admin"
+)
 
 
 def _application_number(product_code: str) -> str:
@@ -69,8 +72,15 @@ def create_party(body: PartyCreate, db: Session = Depends(get_db), _=Depends(age
     return party
 
 
-def _search_parties_by_name(db: Session, name: str) -> list[Party]:
-    """Exact / partial case-insensitive name match, ranked best-first."""
+def _search_parties(
+    db: Session,
+    name: str,
+    *,
+    email: str | None = None,
+    id_number: str | None = None,
+    date_of_birth: str | None = None,
+) -> list[Party]:
+    """Name required; optional email / ID / DOB filters. Ranked best-first by name."""
     name_q = " ".join((name or "").split())
     if not name_q:
         raise HTTPException(400, "Name is required for client search")
@@ -79,6 +89,18 @@ def _search_parties_by_name(db: Session, name: str) -> list[Party]:
     q = db.query(Party)
     for token in tokens:
         q = q.filter(Party.full_name.ilike(f"%{token}%"))
+
+    email_q = (email or "").strip()
+    if email_q:
+        q = q.filter(Party.email.ilike(f"%{email_q}%"))
+
+    id_q = (id_number or "").strip()
+    if id_q:
+        q = q.filter(Party.id_number.ilike(f"%{id_q}%"))
+
+    dob_q = (date_of_birth or "").strip()
+    if dob_q:
+        q = q.filter(Party.date_of_birth == dob_q)
 
     rows = q.limit(100).all()
     needle = name_q.casefold()
@@ -116,15 +138,41 @@ def list_parties(db: Session = Depends(get_db), user: dict = Depends(auth)):
 
 
 @router.get("/clients/search", response_model=list[PartyOut])
-def search_clients(name: str, db: Session = Depends(get_db), _=Depends(agent_auth)):
-    """Find existing clients by exact or partial name match (case-insensitive)."""
-    return _search_parties_by_name(db, name)
+def search_clients(
+    name: str,
+    email: str | None = None,
+    id_number: str | None = None,
+    date_of_birth: str | None = None,
+    db: Session = Depends(get_db),
+    _=Depends(client_search_auth),
+):
+    """Find clients by name (required) plus optional email, ID number, and DOB."""
+    return _search_parties(
+        db,
+        name,
+        email=email,
+        id_number=id_number,
+        date_of_birth=date_of_birth,
+    )
 
 
 @router.get("/parties/search", response_model=list[PartyOut])
-def search_parties(name: str, db: Session = Depends(get_db), _=Depends(agent_auth)):
+def search_parties(
+    name: str,
+    email: str | None = None,
+    id_number: str | None = None,
+    date_of_birth: str | None = None,
+    db: Session = Depends(get_db),
+    _=Depends(client_search_auth),
+):
     """Legacy alias — prefer /clients/search to avoid clashing with /parties/{id}."""
-    return _search_parties_by_name(db, name)
+    return _search_parties(
+        db,
+        name,
+        email=email,
+        id_number=id_number,
+        date_of_birth=date_of_birth,
+    )
 
 
 @router.get("/parties/{party_id}", response_model=PartyOut)
