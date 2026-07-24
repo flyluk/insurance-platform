@@ -8,6 +8,7 @@ const links = [
   { to: "/policies", label: "Policies", roles: ["agent", "admin", "underwriter"] },
   { to: "/claims", label: "Claims", roles: ["claims", "admin"] },
   { to: "/finance", label: "Finance", roles: ["finance", "admin"] },
+  { to: "/users", label: "Users", roles: ["admin"] },
 ];
 
 export default function Layout() {
