@@ -384,6 +384,12 @@ a.linkish { text-decoration: underline; }
   color: var(--accent);
   font-weight: 600;
 }
+.filter-field {
+  max-width: 16rem;
+}
+.filter-field select {
+  min-width: 10rem;
+}
 .tab-count {
   font-size: 0.78rem;
   font-weight: 600;
