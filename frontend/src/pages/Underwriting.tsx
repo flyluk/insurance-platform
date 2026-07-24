@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
-import PartyDetails, { PartyCell, PartySummary, partyLabel } from "../components/PartyDetails";
+import PartyDetails, { PartyCell, PartySummary } from "../components/PartyDetails";
 import { flattenRiskEntries } from "../utils/formatRisk";
 
 type Case = {
@@ -38,6 +38,10 @@ function formatRisk(attrs: Record<string, unknown> | null | undefined) {
       <strong className="risk-value">{row.value}</strong>
     </div>
   ));
+}
+
+function appLabel(c: Case): string {
+  return c.application_number || c.application_id;
 }
 
 export default function Underwriting() {
@@ -89,11 +93,24 @@ export default function Underwriting() {
     };
   }, [selectedId, selectionVersion]);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedId(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId]);
+
   async function decide(id: string, decision: "ACCEPT" | "DECLINE") {
     await api.post(`/uw/cases/${id}/decide`, { decision, reason: `Manual ${decision}` });
     await refresh();
     setSelectedId(id);
     setSelectionVersion((version) => version + 1);
+  }
+
+  function closeModal() {
+    setSelectedId(null);
   }
 
   return (
@@ -103,139 +120,75 @@ export default function Underwriting() {
         <p>Referral queue and automated decisions across AUTO, HOME, and LIFE.</p>
       </div>
 
-      <div className="grid-2">
-        <div className="panel">
-          <h3>Referral queue</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Application</th>
-                <th>Product</th>
-                <th>Owner</th>
-                <th>Insured</th>
-                <th>Premium</th>
-                <th>Reason</th>
-                <th />
+      <div className="panel">
+        <h3>Referral queue</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Application</th>
+              <th>Product</th>
+              <th>Owner</th>
+              <th>Insured</th>
+              <th>Premium</th>
+              <th>Reason</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {queue.map((c) => (
+              <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
+                <td>
+                  <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
+                    {appLabel(c)}
+                  </button>
+                </td>
+                <td>{c.product_code}</td>
+                <td><PartyCell party={c.owner} /></td>
+                <td><PartyCell party={c.insured} /></td>
+                <td>{c.annual_premium}</td>
+                <td>{c.reason}</td>
+                <td className="row">
+                  <button className="btn" type="button" onClick={() => decide(c.id, "ACCEPT")}>
+                    Accept
+                  </button>
+                  <button className="btn danger" type="button" onClick={() => decide(c.id, "DECLINE")}>
+                    Decline
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {queue.map((c) => (
-                <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
-                  <td>
-                    <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
-                      {c.application_number || c.product_code}
-                    </button>
-                  </td>
-                  <td>{c.product_code}</td>
-                  <td><PartyCell party={c.owner} /></td>
-                  <td><PartyCell party={c.insured} /></td>
-                  <td>{c.annual_premium}</td>
-                  <td>{c.reason}</td>
-                  <td className="row">
-                    <button className="btn" type="button" onClick={() => decide(c.id, "ACCEPT")}>
-                      Accept
-                    </button>
-                    <button className="btn danger" type="button" onClick={() => decide(c.id, "DECLINE")}>
-                      Decline
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!queue.length && (
-                <tr>
-                  <td colSpan={7} className="muted">
-                    No referrals waiting
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="panel stack">
-          <h3>Case details</h3>
-          {!selected && <p className="muted">Select a case from the queue or all cases list.</p>}
-          {selected && (
-            <>
-              <div className="detail-grid">
-                <div className="detail-row">
-                  <span className="muted">Status</span>
-                  <span className={`badge ${selected.status === "REFERRED" ? "warn" : selected.status === "DECLINED" ? "bad" : ""}`}>
-                    {selected.status}
-                  </span>
-                </div>
-                <div className="detail-row">
-                  <span className="muted">Product</span>
-                  <strong>{selected.product_code}</strong>
-                </div>
-                <div className="detail-row">
-                  <span className="muted">Premium</span>
-                  <strong>${selected.annual_premium.toFixed(2)}</strong>
-                </div>
-                <div className="detail-row">
-                  <span className="muted">Auto decision</span>
-                  <strong>{selected.auto_decision || "—"}</strong>
-                </div>
-                <div className="detail-row">
-                  <span className="muted">Final decision</span>
-                  <strong>{selected.final_decision || "—"}</strong>
-                </div>
-                <div className="detail-row">
-                  <span className="muted">Reason</span>
-                  <strong>{selected.reason || "—"}</strong>
-                </div>
-                <div className="detail-row">
-                  <span className="muted">Application</span>
-                  <strong className="mono">{selected.application_number || "—"}</strong>
-                </div>
-              </div>
-              <h4>Parties</h4>
-              <div className="party-pair">
-                <PartyDetails role="Owner" party={selected.owner} />
-                <PartyDetails role="Insured" party={selected.insured} />
-              </div>
-              <h4>Risk attributes</h4>
-              <div className="detail-grid">{formatRisk(selected.risk_attributes) || <span className="muted">None</span>}</div>
-              {linkedPolicy && (
-                <div className="policy-link-box">
-                  <div>
-                    <div className="muted">Bound policy</div>
-                    <strong>{linkedPolicy.policy_number}</strong>
-                    <span className={`badge ${linkedPolicy.status !== "ACTIVE" ? "bad" : ""}`} style={{ marginLeft: "0.5rem" }}>
-                      {linkedPolicy.status}
-                    </span>
-                  </div>
-                  <Link className="btn" to={`/policies/${linkedPolicy.id}`}>
-                    View policy details
-                  </Link>
-                </div>
-              )}
-              {selected.final_decision === "ACCEPT" && !linkedPolicy && (
-                <p className="muted">Accepted — policy may still be binding. Refresh shortly.</p>
-              )}
-            </>
-          )}
-        </div>
+            ))}
+            {!queue.length && (
+              <tr>
+                <td colSpan={7} className="muted">
+                  No referrals waiting
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <div className="panel">
         <h3>All cases</h3>
         <table>
-            <thead>
-              <tr>
-                <th>Application</th>
-                <th>Product</th>
-                <th>Status</th>
-                <th>Auto</th>
-                <th>Final</th>
-                <th>Reason</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {all.map((c) => (
+          <thead>
+            <tr>
+              <th>Application</th>
+              <th>Product</th>
+              <th>Status</th>
+              <th>Auto</th>
+              <th>Final</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {all.map((c) => (
               <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
-                <td className="mono">{c.application_number || "—"}</td>
+                <td>
+                  <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
+                    {appLabel(c)}
+                  </button>
+                </td>
                 <td>{c.product_code}</td>
                 <td>
                   <span className={`badge ${c.status === "REFERRED" ? "warn" : c.status === "DECLINED" ? "bad" : ""}`}>
@@ -245,16 +198,103 @@ export default function Underwriting() {
                 <td>{c.auto_decision}</td>
                 <td>{c.final_decision || "—"}</td>
                 <td>{c.reason}</td>
-                <td>
-                  <button type="button" className="btn ghost" onClick={() => setSelectedId(c.id)}>
-                    Details
-                  </button>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {selectedId && (
+        <div className="modal-backdrop" onClick={closeModal} role="presentation">
+          <div
+            className="modal-panel stack"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="uw-detail-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h3 id="uw-detail-title" style={{ margin: 0 }}>
+                {selected ? appLabel(selected) : "Case details"}
+              </h3>
+              <button className="btn ghost" type="button" onClick={closeModal}>
+                Close
+              </button>
+            </div>
+            {!selected && <p className="muted">Loading…</p>}
+            {selected && (
+              <>
+                <div className="detail-grid">
+                  <div className="detail-row">
+                    <span className="muted">Status</span>
+                    <span className={`badge ${selected.status === "REFERRED" ? "warn" : selected.status === "DECLINED" ? "bad" : ""}`}>
+                      {selected.status}
+                    </span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="muted">Product</span>
+                    <strong>{selected.product_code}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span className="muted">Premium</span>
+                    <strong>${selected.annual_premium.toFixed(2)}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span className="muted">Auto decision</span>
+                    <strong>{selected.auto_decision || "—"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span className="muted">Final decision</span>
+                    <strong>{selected.final_decision || "—"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span className="muted">Reason</span>
+                    <strong>{selected.reason || "—"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span className="muted">Application</span>
+                    <strong className="mono">{appLabel(selected)}</strong>
+                  </div>
+                </div>
+                <h4>Parties</h4>
+                <div className="party-pair">
+                  <PartyDetails role="Owner" party={selected.owner} />
+                  <PartyDetails role="Insured" party={selected.insured} />
+                </div>
+                <h4>Risk attributes</h4>
+                <div className="detail-grid">{formatRisk(selected.risk_attributes) || <span className="muted">None</span>}</div>
+                {linkedPolicy && (
+                  <div className="policy-link-box">
+                    <div>
+                      <div className="muted">Bound policy</div>
+                      <strong>{linkedPolicy.policy_number}</strong>
+                      <span className={`badge ${linkedPolicy.status !== "ACTIVE" ? "bad" : ""}`} style={{ marginLeft: "0.5rem" }}>
+                        {linkedPolicy.status}
+                      </span>
+                    </div>
+                    <Link className="btn" to={`/policies/${linkedPolicy.id}`}>
+                      View policy details
+                    </Link>
+                  </div>
+                )}
+                {selected.final_decision === "ACCEPT" && !linkedPolicy && (
+                  <p className="muted">Accepted — policy may still be binding. Refresh shortly.</p>
+                )}
+                {selected.status === "REFERRED" && (
+                  <div className="row">
+                    <button className="btn" type="button" onClick={() => decide(selected.id, "ACCEPT")}>
+                      Accept
+                    </button>
+                    <button className="btn danger" type="button" onClick={() => decide(selected.id, "DECLINE")}>
+                      Decline
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
