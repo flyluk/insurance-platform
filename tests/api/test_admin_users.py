@@ -47,3 +47,20 @@ def test_admin_list_and_update_user(api_client, admin_headers, agent_headers):
         },
     )
     assert restore.status_code == 200, restore.text
+
+
+@pytest.mark.story("KAN-1")
+def test_admin_login_as_user(api_client, admin_headers, agent_headers):
+    users = api_client.get("/api/users", headers=admin_headers)
+    assert users.status_code == 200
+    agent = next(u for u in users.json() if u["email"] == "agent@insurance.local")
+
+    session = api_client.post(f"/api/users/{agent['id']}/login-as", headers=admin_headers)
+    assert session.status_code == 200, session.text
+    body = session.json()
+    assert body["email"] == "agent@insurance.local"
+    assert body["role"] == "agent"
+    assert body["access_token"]
+
+    forbidden = api_client.post(f"/api/users/{agent['id']}/login-as", headers=agent_headers)
+    assert forbidden.status_code == 403

@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/client";
+import { useAuth } from "../components/AuthContext";
 import Pagination, { usePagination } from "../components/Pagination";
 
 const ROLES = [
@@ -54,11 +56,14 @@ function formFromUser(u: UserRow): EditForm {
 }
 
 export default function Users() {
+  const navigate = useNavigate();
+  const { user: currentUser, adoptSession } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [msg, setMsg] = useState("");
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [form, setForm] = useState<EditForm>(emptyForm());
   const [saveBusy, setSaveBusy] = useState(false);
+  const [loginBusyId, setLoginBusyId] = useState<string | null>(null);
   const [formError, setFormError] = useState("");
   const selectionRequest = useRef(0);
 
@@ -106,6 +111,32 @@ export default function Users() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  async function loginAs(u: UserRow) {
+    if (!u.is_active) {
+      setMsg("Cannot login as an inactive user");
+      return;
+    }
+    if (currentUser?.email === u.email) {
+      setMsg(`Already signed in as ${u.full_name}`);
+      return;
+    }
+    setLoginBusyId(u.id);
+    setMsg("");
+    try {
+      const { data } = await api.post(`/users/${u.id}/login-as`);
+      adoptSession(data, { keepAdminReturn: true });
+      closeModal();
+      navigate("/");
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (err instanceof Error ? err.message : "Login as failed");
+      setMsg(String(detail));
+    } finally {
+      setLoginBusyId(null);
+    }
+  }
+
   async function saveUser(e: FormEvent) {
     e.preventDefault();
     if (!editing) return;
@@ -150,7 +181,10 @@ export default function Users() {
     <div className="stack">
       <div className="hero">
         <h1>Users</h1>
-        <p>Admin directory of staff and policyholder accounts. Click a user to update their details.</p>
+        <p>
+          Manage accounts and login as admin, agent, underwriter, claims, finance, and other roles
+          without their passwords.
+        </p>
       </div>
       {msg && <div className="muted">{msg}</div>}
 
@@ -185,7 +219,15 @@ export default function Users() {
                   </span>
                 </td>
                 <td className="mono muted">{u.party_id || "—"}</td>
-                <td>
+                <td className="row">
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={!u.is_active || loginBusyId === u.id}
+                    onClick={() => loginAs(u).catch(console.error)}
+                  >
+                    {loginBusyId === u.id ? "Signing in…" : "Login as"}
+                  </button>
                   <button className="btn ghost" type="button" onClick={() => openEdit(u)}>
                     Edit
                   </button>
@@ -290,6 +332,14 @@ export default function Users() {
               <div className="row">
                 <button className="btn" type="submit" disabled={saveBusy}>
                   {saveBusy ? "Saving…" : "Save changes"}
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={!editing.is_active || loginBusyId === editing.id}
+                  onClick={() => loginAs(editing).catch(console.error)}
+                >
+                  {loginBusyId === editing.id ? "Signing in…" : `Login as ${editing.role}`}
                 </button>
                 <button className="btn ghost" type="button" onClick={closeModal}>
                   Cancel

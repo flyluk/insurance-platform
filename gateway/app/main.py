@@ -144,22 +144,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         raise HTTPException(401, "Invalid credentials")
     if not user.is_active:
         raise HTTPException(403, "User inactive")
-    token = create_access_token(
-        subject=user.id,
-        email=user.email,
-        role=user.role,
-        secret=settings.jwt_secret,
-        algorithm=settings.jwt_algorithm,
-        expire_minutes=settings.jwt_expire_minutes,
-        party_id=user.party_id,
-    )
-    return TokenOut(
-        access_token=token,
-        role=user.role,
-        email=user.email,
-        full_name=user.full_name,
-        party_id=user.party_id,
-    )
+    return _token_for_user(user)
 
 
 @app.get("/api/auth/me")
@@ -220,6 +205,36 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+def _token_for_user(user: User) -> TokenOut:
+    token = create_access_token(
+        subject=user.id,
+        email=user.email,
+        role=user.role,
+        secret=settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+        expire_minutes=settings.jwt_expire_minutes,
+        party_id=user.party_id,
+    )
+    return TokenOut(
+        access_token=token,
+        role=user.role,
+        email=user.email,
+        full_name=user.full_name,
+        party_id=user.party_id,
+    )
+
+
+@app.post("/api/users/{user_id}/login-as", response_model=TokenOut)
+def login_as_user(user_id: str, db: Session = Depends(get_db), _=Depends(admin_auth)):
+    """Admin-only: issue a session token for the selected account (no password)."""
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not user.is_active:
+        raise HTTPException(403, "User inactive")
+    return _token_for_user(user)
 
 
 def _target_for(path: str) -> str | None:

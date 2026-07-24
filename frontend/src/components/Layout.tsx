@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
 const links = [
@@ -12,7 +12,8 @@ const links = [
 ];
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, impersonating, returnToAdmin } = useAuth();
+  const navigate = useNavigate();
   const role = user?.role || "";
 
   return (
@@ -23,7 +24,7 @@ export default function Layout() {
         </Link>
         <nav className="nav">
           {links
-            .filter((l) => l.roles.includes(role) || role === "admin")
+            .filter((l) => l.roles.includes(role))
             .map((l) => (
               <NavLink key={l.to} to={l.to} className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
                 {l.label}
@@ -33,7 +34,19 @@ export default function Layout() {
         <div className="userbox">
           <span>
             {user?.full_name} · {user?.role}
+            {impersonating ? " · impersonating" : ""}
           </span>
+          {impersonating && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                if (returnToAdmin()) navigate("/users");
+              }}
+            >
+              Back to admin
+            </button>
+          )}
           <button type="button" className="btn ghost" onClick={logout}>
             Sign out
           </button>
