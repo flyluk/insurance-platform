@@ -25,10 +25,31 @@ def _ensure_party_columns() -> None:
         "ALTER TABLE quotes ADD COLUMN IF NOT EXISTS rider_ids JSONB DEFAULT '[]'::jsonb",
         "ALTER TABLE quotes ADD COLUMN IF NOT EXISTS insured_party_id VARCHAR(36)",
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS insured_party_id VARCHAR(36)",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS application_number VARCHAR(64)",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS policy_number VARCHAR(64)",
     ]
     with engine.begin() as conn:
         for stmt in statements:
             conn.execute(text(stmt))
+        # Backfill readable codes for rows created before the column existed.
+        conn.execute(
+            text(
+                """
+                UPDATE applications
+                SET application_number = 'APP-' || product_code || '-' ||
+                    UPPER(SUBSTRING(REPLACE(id, '-', '') FROM 1 FOR 6))
+                WHERE application_number IS NULL OR application_number = ''
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_applications_application_number
+                ON applications (application_number)
+                """
+            )
+        )
 
 
 @asynccontextmanager

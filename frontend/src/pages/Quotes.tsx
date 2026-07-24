@@ -1,6 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import api from "../api/client";
-import { PartyCell, PartySummary } from "../components/PartyDetails";
+import Pagination, { usePagination } from "../components/Pagination";
+import PartyDetails, { PartyCell, PartySummary } from "../components/PartyDetails";
+import Tabs from "../components/Tabs";
+import { flattenRiskEntries } from "../utils/formatRisk";
 
 type Party = {
   id: string;
@@ -59,11 +62,18 @@ type ProductPlan = {
 
 type Application = {
   id: string;
+  application_number: string;
   quote_id: string;
   product_code: string;
   status: string;
   annual_premium: number;
   uw_decision: string | null;
+  uw_reason?: string | null;
+  policy_id?: string | null;
+  policy_number?: string | null;
+  risk_attributes?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
   owner?: PartySummary | null;
   insured?: PartySummary | null;
 };
@@ -96,19 +106,37 @@ export default function Quotes() {
   const [selectedRiders, setSelectedRiders] = useState<string[]>([]);
   const [risk, setRisk] = useState<Record<string, unknown>>({});
   const [msg, setMsg] = useState("");
+  const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [policyByAppId, setPolicyByAppId] = useState<Record<string, string>>({});
+  const [listTab, setListTab] = useState<"quotes" | "applications">("quotes");
 
   async function refresh() {
-    const [q, a] = await Promise.all([
+    const [q, a, p] = await Promise.all([
       api.get("/nb/quotes"),
       api.get("/nb/applications"),
+      api.get("/policies").catch(() => ({ data: [] })),
     ]);
     setQuotes(q.data);
     setApps(a.data);
+    const map: Record<string, string> = {};
+    for (const pol of p.data as { application_id?: string; policy_number?: string }[]) {
+      if (pol.application_id && pol.policy_number) map[pol.application_id] = pol.policy_number;
+    }
+    setPolicyByAppId(map);
   }
 
   useEffect(() => {
     refresh().catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (!selectedApp) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedApp(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedApp]);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,6 +289,13 @@ export default function Quotes() {
   }
 
   const schema = selectedPlan?.risk_schema || [];
+
+  function appPolicyNumber(a: Application): string {
+    return a.policy_number || policyByAppId[a.id] || "";
+  }
+
+  const quotePage = usePagination(quotes);
+  const appPage = usePagination(apps);
 
   return (
     <div className="stack">
@@ -524,74 +559,198 @@ export default function Quotes() {
         </form>
       </div>
       <div className="panel">
-        <h3>Quotes</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Owner</th>
-              <th>Insured</th>
-              <th>Status</th>
-              <th>Premium</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {quotes.map((q) => (
-              <tr key={q.id}>
-                <td>{q.product_code}</td>
-                <td><PartyCell party={q.owner} /></td>
-                <td><PartyCell party={q.insured} /></td>
-                <td>
-                  <span className="badge">{q.status}</span>
-                </td>
-                <td>{q.annual_premium ?? "—"}</td>
-                <td className="row">
-                  {q.status === "DRAFT" && (
-                    <button className="btn ghost" type="button" onClick={() => rate(q.id)}>
-                      Rate
-                    </button>
-                  )}
-                  {q.status === "RATED" && (
-                    <button className="btn" type="button" onClick={() => submit(q.id)}>
-                      Submit
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Tabs
+          active={listTab}
+          onChange={(id) => setListTab(id as "quotes" | "applications")}
+          tabs={[
+            { id: "quotes", label: "Quotes", count: quotes.length },
+            { id: "applications", label: "Applications", count: apps.length },
+          ]}
+        />
+
+        {listTab === "quotes" && (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Owner</th>
+                  <th>Insured</th>
+                  <th>Status</th>
+                  <th>Premium</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {quotePage.pageItems.map((q) => (
+                  <tr key={q.id}>
+                    <td>{q.product_code}</td>
+                    <td><PartyCell party={q.owner} /></td>
+                    <td><PartyCell party={q.insured} /></td>
+                    <td>
+                      <span className="badge">{q.status}</span>
+                    </td>
+                    <td>{q.annual_premium ?? "—"}</td>
+                    <td className="row">
+                      {q.status === "DRAFT" && (
+                        <button className="btn ghost" type="button" onClick={() => rate(q.id)}>
+                          Rate
+                        </button>
+                      )}
+                      {q.status === "RATED" && (
+                        <button className="btn" type="button" onClick={() => submit(q.id)}>
+                          Submit
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              page={quotePage.page}
+              totalPages={quotePage.totalPages}
+              total={quotePage.total}
+              pageSize={quotePage.pageSize}
+              onPageChange={quotePage.setPage}
+              onPageSizeChange={quotePage.setPageSize}
+            />
+          </>
+        )}
+
+        {listTab === "applications" && (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Application</th>
+                  <th>Product</th>
+                  <th>Owner</th>
+                  <th>Insured</th>
+                  <th>Status</th>
+                  <th>UW</th>
+                  <th>Premium</th>
+                  <th>Policy</th>
+                </tr>
+              </thead>
+              <tbody>
+                {appPage.pageItems.map((a) => (
+                  <tr
+                    key={a.id}
+                    className="clickable-row"
+                    onClick={() => setSelectedApp(a)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedApp(a);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View application ${a.application_number}`}
+                  >
+                    <td>
+                      <span className="linkish">{a.application_number}</span>
+                    </td>
+                    <td>{a.product_code}</td>
+                    <td><PartyCell party={a.owner} /></td>
+                    <td><PartyCell party={a.insured} /></td>
+                    <td>
+                      <span className="badge">{a.status}</span>
+                    </td>
+                    <td>{a.uw_decision || "—"}</td>
+                    <td>{a.annual_premium}</td>
+                    <td>{appPolicyNumber(a) || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              page={appPage.page}
+              totalPages={appPage.totalPages}
+              total={appPage.total}
+              pageSize={appPage.pageSize}
+              onPageChange={appPage.setPage}
+              onPageSizeChange={appPage.setPageSize}
+            />
+          </>
+        )}
       </div>
-      <div className="panel">
-        <h3>Applications</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Owner</th>
-              <th>Insured</th>
-              <th>Status</th>
-              <th>UW</th>
-              <th>Premium</th>
-            </tr>
-          </thead>
-          <tbody>
-            {apps.map((a) => (
-              <tr key={a.id}>
-                <td>{a.product_code}</td>
-                <td><PartyCell party={a.owner} /></td>
-                <td><PartyCell party={a.insured} /></td>
-                <td>
-                  <span className="badge">{a.status}</span>
-                </td>
-                <td>{a.uw_decision || "—"}</td>
-                <td>{a.annual_premium}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+      {selectedApp && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setSelectedApp(null)}
+          role="presentation"
+        >
+          <div
+            className="modal-panel stack"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="app-detail-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h3 id="app-detail-title" style={{ margin: 0 }}>
+                {selectedApp.application_number}
+              </h3>
+              <button className="btn ghost" type="button" onClick={() => setSelectedApp(null)}>
+                Close
+              </button>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-row">
+                <span className="muted">Product</span>
+                <strong>{selectedApp.product_code}</strong>
+              </div>
+              <div className="detail-row">
+                <span className="muted">Status</span>
+                <span className="badge">{selectedApp.status}</span>
+              </div>
+              <div className="detail-row">
+                <span className="muted">UW decision</span>
+                <strong>{selectedApp.uw_decision || "—"}</strong>
+              </div>
+              <div className="detail-row">
+                <span className="muted">UW reason</span>
+                <strong>{selectedApp.uw_reason || "—"}</strong>
+              </div>
+              <div className="detail-row">
+                <span className="muted">Annual premium</span>
+                <strong>${Number(selectedApp.annual_premium).toFixed(2)}</strong>
+              </div>
+              <div className="detail-row">
+                <span className="muted">Policy</span>
+                <strong className="mono">{appPolicyNumber(selectedApp) || "—"}</strong>
+              </div>
+              {selectedApp.created_at && (
+                <div className="detail-row">
+                  <span className="muted">Submitted</span>
+                  <strong>{selectedApp.created_at.slice(0, 19).replace("T", " ")}</strong>
+                </div>
+              )}
+            </div>
+            <h4>Parties</h4>
+            <div className="party-pair">
+              <PartyDetails role="Owner" party={selectedApp.owner} />
+              <PartyDetails role="Insured" party={selectedApp.insured} />
+            </div>
+            <h4>Risk attributes</h4>
+            <div className="detail-grid">
+              {selectedApp.risk_attributes && Object.keys(selectedApp.risk_attributes).length
+                ? flattenRiskEntries(selectedApp.risk_attributes).map((row) => (
+                    <div key={row.key} className="detail-row">
+                      <span className="muted">{row.label}</span>
+                      <strong className="risk-value">{row.value}</strong>
+                    </div>
+                  ))
+                : (
+                  <span className="muted">None</span>
+                )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

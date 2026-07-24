@@ -37,6 +37,7 @@ def handle_domain_event(event: dict) -> None:
                 policy = Policy(
                     policy_number=_policy_number(payload["product_code"]),
                     application_id=app_id,
+                    application_number=payload.get("application_number"),
                     party_id=owner_id,
                     owner_party_id=owner_id,
                     insured_party_id=insured_id,

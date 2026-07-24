@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../components/AuthContext";
+import Pagination, { usePagination } from "../components/Pagination";
 import PartyDetails, { PartySummary } from "../components/PartyDetails";
 import { flattenRiskEntries } from "../utils/formatRisk";
 
@@ -9,6 +10,7 @@ type Policy = {
   id: string;
   policy_number: string;
   application_id: string;
+  application_number?: string | null;
   party_id: string;
   insured_party_id?: string | null;
   product_code: string;
@@ -248,6 +250,7 @@ export default function PolicyDetail() {
   }
 
   const isActive = policy.status === "ACTIVE";
+  const endorsementPage = usePagination(endorsements);
 
   return (
     <div className="stack">
@@ -270,12 +273,12 @@ export default function PolicyDetail() {
           <h3>Policy details</h3>
           <div className="detail-grid">
             <div className="detail-row">
-              <span className="muted">Policy ID</span>
-              <strong className="mono">{policy.id}</strong>
+              <span className="muted">Policy number</span>
+              <strong className="mono">{policy.policy_number}</strong>
             </div>
             <div className="detail-row">
               <span className="muted">Application</span>
-              <strong className="mono">{policy.application_id}</strong>
+              <strong className="mono">{policy.application_number || "—"}</strong>
             </div>
             <div className="detail-row">
               <span className="muted">Product</span>
@@ -518,7 +521,7 @@ export default function PolicyDetail() {
             </tr>
           </thead>
           <tbody>
-            {endorsements.map((e) => (
+            {endorsementPage.pageItems.map((e) => (
               <tr key={e.id}>
                 <td>{e.endorsement_type}</td>
                 <td>{e.description || "—"}</td>
@@ -540,6 +543,14 @@ export default function PolicyDetail() {
             )}
           </tbody>
         </table>
+        <Pagination
+          page={endorsementPage.page}
+          totalPages={endorsementPage.totalPages}
+          total={endorsementPage.total}
+          pageSize={endorsementPage.pageSize}
+          onPageChange={endorsementPage.setPage}
+          onPageSizeChange={endorsementPage.setPageSize}
+        />
       </div>
     </div>
   );

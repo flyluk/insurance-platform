@@ -10,6 +10,7 @@ class PolicyOut(BaseModel):
     id: str
     policy_number: str
     application_id: str
+    application_number: str | None = None
     party_id: str
     owner_party_id: str | None = None
     insured_party_id: str | None = None

@@ -49,6 +49,8 @@ def handle_domain_event(event: dict) -> None:
                     raise LookupError(f"Application not found for PolicyBound: {app_id}")
                 app.status = "BOUND"
                 app.policy_id = payload.get("policy_id")
+                if payload.get("policy_number"):
+                    app.policy_number = payload["policy_number"]
                 record_event("PolicyBound", "consumed", settings.service_name)
 
         mark_processed(db, event_id, event_type)

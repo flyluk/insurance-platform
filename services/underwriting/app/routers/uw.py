@@ -43,6 +43,7 @@ def _case_out(case: UnderwritingCase, cache: dict | None = None) -> CaseOut:
 def _emit_decision(db: Session, case: UnderwritingCase) -> None:
     payload = {
         "application_id": case.application_id,
+        "application_number": case.application_number,
         "case_id": case.id,
         "party_id": case.party_id,
         "owner_party_id": case.party_id,

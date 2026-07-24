@@ -50,6 +50,7 @@ class Application(Base):
     __tablename__ = "applications"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    application_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     quote_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
     party_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)  # owner
     insured_party_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
@@ -61,5 +62,6 @@ class Application(Base):
     uw_decision: Mapped[str | None] = mapped_column(String(32), nullable=True)
     uw_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     policy_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    policy_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

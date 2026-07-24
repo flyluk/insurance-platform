@@ -57,11 +57,25 @@ def test_create_rate_quote(api_client, agent_headers):
     assert body["annual_premium"] > 0
 
 
+def test_submit_application_has_readable_number(api_client, agent_headers):
+    """Submitted applications expose APP-{PRODUCT}-###### codes."""
+    _, quote = create_auto_quote(api_client, agent_headers)
+    rated = api_client.post(f"/api/nb/quotes/{quote['id']}/rate", headers=agent_headers)
+    assert rated.status_code == 200
+    submitted = api_client.post(f"/api/nb/quotes/{quote['id']}/submit", headers=agent_headers)
+    assert submitted.status_code == 200, submitted.text
+    app = submitted.json()
+    assert app["application_number"].startswith("APP-AUTO-")
+    assert len(app["application_number"]) >= len("APP-AUTO-XXXXXX")
+
+
 def test_list_applications(api_client, agent_headers):
     """List new-business applications."""
     resp = api_client.get("/api/nb/applications", headers=agent_headers)
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
+    for app in resp.json():
+        assert app.get("application_number")
 
 
 def test_search_parties_by_name(api_client, agent_headers):
@@ -106,3 +120,41 @@ def test_search_parties_by_name(api_client, agent_headers):
         params={"name": ""},
     )
     assert bad.status_code == 400
+
+
+def test_search_clients_optional_filters(api_client, agent_headers):
+    """Optional email / ID / DOB narrow client search; name remains required."""
+    email = unique_email("filter")
+    payload = party_create_payload(
+        f"Filterable Client {email.split('@')[0]}",
+        email=email,
+        id_number="ID-FILTER-99",
+        date_of_birth="1988-07-04",
+    )
+    created = api_client.post("/api/nb/parties", headers=agent_headers, json=payload)
+    assert created.status_code == 200, created.text
+    party_id = created.json()["id"]
+
+    hit = api_client.get(
+        "/api/nb/clients/search",
+        headers=agent_headers,
+        params={
+            "name": "Filterable Client",
+            "email": email,
+            "id_number": "FILTER-99",
+            "date_of_birth": "1988-07-04",
+        },
+    )
+    assert hit.status_code == 200
+    assert party_id in {p["id"] for p in hit.json()}
+
+    miss = api_client.get(
+        "/api/nb/clients/search",
+        headers=agent_headers,
+        params={
+            "name": "Filterable Client",
+            "email": "nobody@example.com",
+        },
+    )
+    assert miss.status_code == 200
+    assert party_id not in {p["id"] for p in miss.json()}

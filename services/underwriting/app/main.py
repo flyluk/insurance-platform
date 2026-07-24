@@ -20,10 +20,21 @@ def _ensure_uw_columns() -> None:
         "ALTER TABLE uw_cases ADD COLUMN IF NOT EXISTS insured_party_id VARCHAR(36)",
         "ALTER TABLE uw_cases ADD COLUMN IF NOT EXISTS owner_snapshot JSONB DEFAULT '{}'::jsonb",
         "ALTER TABLE uw_cases ADD COLUMN IF NOT EXISTS insured_snapshot JSONB DEFAULT '{}'::jsonb",
+        "ALTER TABLE uw_cases ADD COLUMN IF NOT EXISTS application_number VARCHAR(64)",
     ]
     with engine.begin() as conn:
         for stmt in statements:
             conn.execute(text(stmt))
+        conn.execute(
+            text(
+                """
+                UPDATE uw_cases
+                SET application_number = 'APP-' || product_code || '-' ||
+                    UPPER(SUBSTRING(REPLACE(application_id, '-', '') FROM 1 FOR 6))
+                WHERE application_number IS NULL OR application_number = ''
+                """
+            )
+        )
 
 
 @asynccontextmanager

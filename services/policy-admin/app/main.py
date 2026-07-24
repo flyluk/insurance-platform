@@ -47,10 +47,21 @@ def _ensure_lifecycle_columns() -> None:
         "ALTER TABLE policies ADD COLUMN IF NOT EXISTS insured_party_id VARCHAR(36)",
         "ALTER TABLE policies ADD COLUMN IF NOT EXISTS owner_snapshot JSONB DEFAULT '{}'::jsonb",
         "ALTER TABLE policies ADD COLUMN IF NOT EXISTS insured_snapshot JSONB DEFAULT '{}'::jsonb",
+        "ALTER TABLE policies ADD COLUMN IF NOT EXISTS application_number VARCHAR(64)",
     ]
     with engine.begin() as conn:
         for stmt in statements:
             conn.execute(text(stmt))
+        conn.execute(
+            text(
+                """
+                UPDATE policies
+                SET application_number = 'APP-' || product_code || '-' ||
+                    UPPER(SUBSTRING(REPLACE(application_id, '-', '') FROM 1 FOR 6))
+                WHERE application_number IS NULL OR application_number = ''
+                """
+            )
+        )
 
 
 app = FastAPI(title="Policy Admin Service", lifespan=lifespan)

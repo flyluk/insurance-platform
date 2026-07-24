@@ -41,6 +41,7 @@ def handle_domain_event(event: dict) -> None:
             )
             case = UnderwritingCase(
                 application_id=payload["application_id"],
+                application_number=payload.get("application_number"),
                 party_id=payload["party_id"],
                 insured_party_id=payload.get("insured_party_id") or payload["party_id"],
                 owner_snapshot=payload.get("owner") or {"id": payload["party_id"]},

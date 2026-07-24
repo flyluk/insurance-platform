@@ -66,6 +66,7 @@ class QuoteOut(BaseModel):
 
 class ApplicationOut(BaseModel):
     id: str
+    application_number: str
     quote_id: str
     party_id: str
     insured_party_id: str | None = None
@@ -76,6 +77,7 @@ class ApplicationOut(BaseModel):
     uw_decision: str | None
     uw_reason: str | None
     policy_id: str | None
+    policy_number: str | None = None
     created_at: datetime
     updated_at: datetime
     owner: PartySummary | None = None

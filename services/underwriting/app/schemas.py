@@ -11,6 +11,7 @@ Decision = Literal["ACCEPT", "REFER", "DECLINE"]
 class CaseOut(BaseModel):
     id: str
     application_id: str
+    application_number: str | None = None
     party_id: str
     insured_party_id: str | None = None
     product_code: str
