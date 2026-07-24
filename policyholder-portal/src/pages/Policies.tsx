@@ -79,6 +79,7 @@ export default function Policies() {
             total={policyPage.total}
             pageSize={policyPage.pageSize}
             onPageChange={policyPage.setPage}
+            onPageSizeChange={policyPage.setPageSize}
           />
         </div>
         <div className="panel stack">

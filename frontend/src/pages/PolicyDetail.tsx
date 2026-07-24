@@ -549,6 +549,7 @@ export default function PolicyDetail() {
           total={endorsementPage.total}
           pageSize={endorsementPage.pageSize}
           onPageChange={endorsementPage.setPage}
+          onPageSizeChange={endorsementPage.setPageSize}
         />
       </div>
     </div>

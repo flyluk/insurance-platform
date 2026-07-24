@@ -250,6 +250,7 @@ export default function Claims() {
           total={claimPage.total}
           pageSize={claimPage.pageSize}
           onPageChange={claimPage.setPage}
+          onPageSizeChange={claimPage.setPageSize}
         />
       </div>
 
@@ -330,6 +331,7 @@ export default function Claims() {
             total={docPage.total}
             pageSize={docPage.pageSize}
             onPageChange={docPage.setPage}
+            onPageSizeChange={docPage.setPageSize}
           />
         </div>
       )}

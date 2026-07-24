@@ -613,6 +613,7 @@ export default function Quotes() {
               total={quotePage.total}
               pageSize={quotePage.pageSize}
               onPageChange={quotePage.setPage}
+              onPageSizeChange={quotePage.setPageSize}
             />
           </>
         )}
@@ -670,6 +671,7 @@ export default function Quotes() {
               total={appPage.total}
               pageSize={appPage.pageSize}
               onPageChange={appPage.setPage}
+              onPageSizeChange={appPage.setPageSize}
             />
           </>
         )}

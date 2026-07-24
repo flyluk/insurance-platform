@@ -264,6 +264,7 @@ export default function Plans() {
             total={planPage.total}
             pageSize={planPage.pageSize}
             onPageChange={planPage.setPage}
+            onPageSizeChange={planPage.setPageSize}
           />
         </div>
         <form className="panel stack" onSubmit={createPlan}>
@@ -413,6 +414,7 @@ export default function Plans() {
               total={ratePage.total}
               pageSize={ratePage.pageSize}
               onPageChange={ratePage.setPage}
+              onPageSizeChange={ratePage.setPageSize}
             />
             <form className="stack" onSubmit={addRate}>
               <div className="grid-2">

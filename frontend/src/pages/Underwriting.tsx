@@ -190,6 +190,7 @@ export default function Underwriting() {
               total={queuePage.total}
               pageSize={queuePage.pageSize}
               onPageChange={queuePage.setPage}
+              onPageSizeChange={queuePage.setPageSize}
             />
           </>
         )}
@@ -234,6 +235,7 @@ export default function Underwriting() {
               total={allPage.total}
               pageSize={allPage.pageSize}
               onPageChange={allPage.setPage}
+              onPageSizeChange={allPage.setPageSize}
             />
           </>
         )}

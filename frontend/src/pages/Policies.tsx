@@ -99,6 +99,7 @@ export default function Policies() {
           total={total}
           pageSize={pageSize}
           onPageChange={setPage}
+          onPageSizeChange={setPageSize}
         />
       </div>
     </div>

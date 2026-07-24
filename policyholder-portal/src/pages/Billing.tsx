@@ -141,6 +141,7 @@ export default function Billing() {
           total={invoicePage.total}
           pageSize={invoicePage.pageSize}
           onPageChange={invoicePage.setPage}
+          onPageSizeChange={invoicePage.setPageSize}
         />
       </div>
 

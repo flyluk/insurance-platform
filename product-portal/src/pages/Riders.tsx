@@ -126,6 +126,7 @@ export default function Riders() {
             total={riderPage.total}
             pageSize={riderPage.pageSize}
             onPageChange={riderPage.setPage}
+            onPageSizeChange={riderPage.setPageSize}
           />
         </div>
         <form className="panel stack" onSubmit={createRider}>

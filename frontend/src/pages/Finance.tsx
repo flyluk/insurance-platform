@@ -120,6 +120,7 @@ export default function Finance() {
               total={invoicePage.total}
               pageSize={invoicePage.pageSize}
               onPageChange={invoicePage.setPage}
+              onPageSizeChange={invoicePage.setPageSize}
             />
           </>
         )}
@@ -154,6 +155,7 @@ export default function Finance() {
               total={disbursementPage.total}
               pageSize={disbursementPage.pageSize}
               onPageChange={disbursementPage.setPage}
+              onPageSizeChange={disbursementPage.setPageSize}
             />
           </>
         )}
@@ -191,6 +193,7 @@ export default function Finance() {
               total={ledgerPage.total}
               pageSize={ledgerPage.pageSize}
               onPageChange={ledgerPage.setPage}
+              onPageSizeChange={ledgerPage.setPageSize}
             />
           </>
         )}
