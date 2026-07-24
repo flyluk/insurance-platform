@@ -1,6 +1,8 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/client";
 import Pagination, { usePagination } from "../components/Pagination";
+
+const BUSINESS_LINES = ["AUTO", "HOME", "LIFE"] as const;
 
 type Party = {
   id: string;
@@ -12,6 +14,13 @@ type Party = {
   id_number?: string | null;
   gender?: string | null;
   created_at?: string;
+};
+
+type LineRecord = {
+  product_code?: string | null;
+  party_id?: string | null;
+  owner_party_id?: string | null;
+  insured_party_id?: string | null;
 };
 
 type EditForm = {
@@ -48,8 +57,18 @@ function formFromParty(p: Party): EditForm {
   };
 }
 
+function addLine(map: Map<string, Set<string>>, partyId: string | null | undefined, code: string | null | undefined) {
+  if (!partyId || !code) return;
+  const line = code.toUpperCase();
+  if (!BUSINESS_LINES.includes(line as (typeof BUSINESS_LINES)[number])) return;
+  if (!map.has(partyId)) map.set(partyId, new Set());
+  map.get(partyId)!.add(line);
+}
+
 export default function Clients() {
   const [clients, setClients] = useState<Party[]>([]);
+  const [linesByParty, setLinesByParty] = useState<Map<string, Set<string>>>(() => new Map());
+  const [lineFilter, setLineFilter] = useState("all");
   const [name, setName] = useState("");
   const [searched, setSearched] = useState(false);
   const [searchBusy, setSearchBusy] = useState(false);
@@ -60,14 +79,34 @@ export default function Clients() {
   const [formError, setFormError] = useState("");
   const selectionRequest = useRef(0);
 
+  async function loadBusinessLines() {
+    const map = new Map<string, Set<string>>();
+    const sources = await Promise.allSettled([
+      api.get("/policies"),
+      api.get("/nb/applications"),
+      api.get("/nb/quotes"),
+    ]);
+    for (const result of sources) {
+      if (result.status !== "fulfilled") continue;
+      const rows = Array.isArray(result.value.data) ? (result.value.data as LineRecord[]) : [];
+      for (const row of rows) {
+        addLine(map, row.party_id, row.product_code);
+        addLine(map, row.owner_party_id, row.product_code);
+        addLine(map, row.insured_party_id, row.product_code);
+      }
+    }
+    setLinesByParty(map);
+  }
+
   async function loadAll() {
     const { data } = await api.get("/nb/parties");
     setClients(Array.isArray(data) ? data : []);
     setSearched(false);
+    setLineFilter("all");
   }
 
   useEffect(() => {
-    loadAll().catch(console.error);
+    Promise.all([loadAll(), loadBusinessLines()]).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -94,6 +133,7 @@ export default function Clients() {
       const hits = Array.isArray(data) ? data : [];
       setClients(hits);
       setSearched(true);
+      setLineFilter("all");
       setMsg(
         hits.length
           ? `Found ${hits.length} client${hits.length === 1 ? "" : "s"}`
@@ -188,7 +228,19 @@ export default function Clients() {
     }
   }
 
-  const page = usePagination(clients);
+  function linesFor(partyId: string): string[] {
+    return Array.from(linesByParty.get(partyId) || []).sort();
+  }
+
+  const visibleClients = useMemo(() => {
+    if (lineFilter === "all") return clients;
+    if (lineFilter === "none") {
+      return clients.filter((c) => !(linesByParty.get(c.id)?.size));
+    }
+    return clients.filter((c) => linesByParty.get(c.id)?.has(lineFilter));
+  }, [clients, linesByParty, lineFilter]);
+
+  const page = usePagination(visibleClients);
 
   return (
     <div className="stack">
@@ -227,9 +279,27 @@ export default function Clients() {
       </form>
 
       <div className="panel stack">
-        <h3 style={{ margin: 0 }}>
-          {searched ? `Matches (${clients.length})` : `All clients (${clients.length})`}
-        </h3>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <h3 style={{ margin: 0 }}>
+            {searched ? `Matches (${visibleClients.length})` : `Clients (${visibleClients.length})`}
+          </h3>
+          <label className="filter-field">
+            Business line
+            <select
+              value={lineFilter}
+              onChange={(e) => setLineFilter(e.target.value)}
+              aria-label="Filter by business line"
+            >
+              <option value="all">All lines</option>
+              {BUSINESS_LINES.map((line) => (
+                <option key={line} value={line}>
+                  {line}
+                </option>
+              ))}
+              <option value="none">No line yet</option>
+            </select>
+          </label>
+        </div>
         <table>
           <thead>
             <tr>
@@ -238,32 +308,49 @@ export default function Clients() {
               <th>Phone</th>
               <th>DOB</th>
               <th>ID number</th>
+              <th>Lines</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {page.pageItems.map((c) => (
-              <tr key={c.id}>
-                <td>
-                  <button type="button" className="linkish" onClick={() => openEdit(c)}>
-                    {c.full_name}
-                  </button>
-                </td>
-                <td>{c.email || "—"}</td>
-                <td>{c.phone || "—"}</td>
-                <td>{c.date_of_birth || "—"}</td>
-                <td>{c.id_number || "—"}</td>
-                <td>
-                  <button className="btn ghost" type="button" onClick={() => openEdit(c)}>
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!clients.length && (
+            {page.pageItems.map((c) => {
+              const lines = linesFor(c.id);
+              return (
+                <tr key={c.id}>
+                  <td>
+                    <button type="button" className="linkish" onClick={() => openEdit(c)}>
+                      {c.full_name}
+                    </button>
+                  </td>
+                  <td>{c.email || "—"}</td>
+                  <td>{c.phone || "—"}</td>
+                  <td>{c.date_of_birth || "—"}</td>
+                  <td>{c.id_number || "—"}</td>
+                  <td>
+                    {lines.length
+                      ? lines.map((line) => (
+                          <span key={line} className="badge" style={{ marginRight: "0.25rem" }}>
+                            {line}
+                          </span>
+                        ))
+                      : "—"}
+                  </td>
+                  <td>
+                    <button className="btn ghost" type="button" onClick={() => openEdit(c)}>
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {!visibleClients.length && (
               <tr>
-                <td colSpan={6} className="muted">
-                  {searched ? "No matching clients." : "No clients yet."}
+                <td colSpan={7} className="muted">
+                  {lineFilter !== "all"
+                    ? "No clients match this business line."
+                    : searched
+                      ? "No matching clients."
+                      : "No clients yet."}
                 </td>
               </tr>
             )}

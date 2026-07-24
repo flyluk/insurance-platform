@@ -43,6 +43,12 @@ def agent_headers(api_client: httpx.Client) -> dict[str, str]:
 
 
 @pytest.fixture
+def admin_headers(api_client: httpx.Client) -> dict[str, str]:
+    token = login(api_client, "admin")["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
 def underwriter_headers(api_client: httpx.Client) -> dict[str, str]:
     token = login(api_client, "underwriter")["access_token"]
     return {"Authorization": f"Bearer {token}"}

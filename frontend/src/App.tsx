@@ -10,6 +10,7 @@ import PolicyDetail from "./pages/PolicyDetail";
 import Claims from "./pages/Claims";
 import Clients from "./pages/Clients";
 import Finance from "./pages/Finance";
+import Users from "./pages/Users";
 
 function Private({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="policies/:id" element={<PolicyDetail />} />
         <Route path="claims" element={<Claims />} />
         <Route path="finance" element={<Finance />} />
+        <Route path="users" element={<Users />} />
       </Route>
     </Routes>
   );
