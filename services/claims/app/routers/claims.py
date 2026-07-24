@@ -27,6 +27,8 @@ doc_write_auth = make_auth_dependency(
 )
 
 ALLOWED_CATEGORIES = {"PHOTO", "POLICE_REPORT", "MEDICAL", "INVOICE", "OTHER"}
+APPROVAL_THRESHOLD = 10_000.0
+CLOSED_STATUSES = ("SETTLED", "DENIED")
 
 
 def _is_policyholder(user: dict) -> bool:
@@ -191,7 +193,7 @@ async def upload_document(
     user: dict = Depends(doc_write_auth),
 ):
     claim = _get_claim_for_user(db, claim_id, user)
-    if claim.status in ("SETTLED", "DENIED") and _is_policyholder(user):
+    if claim.status in CLOSED_STATUSES and _is_policyholder(user):
         raise HTTPException(400, "Cannot add documents to a closed claim")
 
     cat = (category or "OTHER").upper()
@@ -280,39 +282,7 @@ def delete_document(
     return Response(status_code=204)
 
 
-@router.post("/{claim_id}/reserve", response_model=ClaimOut)
-def set_reserve(claim_id: str, body: ReserveUpdate, db: Session = Depends(get_db), _=Depends(claims_auth)):
-    claim = db.get(Claim, claim_id)
-    if not claim or claim.status in ("SETTLED", "DENIED"):
-        raise HTTPException(400, "Claim not reservable")
-    claim.reserve_amount = body.reserve_amount
-    claim.status = "RESERVED"
-    db.commit()
-    db.refresh(claim)
-    counts = _document_counts(db, [claim.id])
-    return _claim_out(claim, counts.get(claim.id, 0))
-
-
-@router.post("/{claim_id}/investigate", response_model=ClaimOut)
-def investigate(claim_id: str, db: Session = Depends(get_db), _=Depends(claims_auth)):
-    claim = db.get(Claim, claim_id)
-    if not claim or claim.status in ("SETTLED", "DENIED"):
-        raise HTTPException(400, "Invalid claim state")
-    claim.status = "INVESTIGATING"
-    db.commit()
-    db.refresh(claim)
-    counts = _document_counts(db, [claim.id])
-    return _claim_out(claim, counts.get(claim.id, 0))
-
-
-@router.post("/{claim_id}/settle", response_model=ClaimOut)
-def settle(claim_id: str, body: SettleIn, db: Session = Depends(get_db), _=Depends(claims_auth)):
-    claim = db.get(Claim, claim_id)
-    if not claim or claim.status in ("SETTLED", "DENIED"):
-        raise HTTPException(400, "Claim not settleable")
-    claim.settlement_amount = body.settlement_amount
-    claim.status = "SETTLED"
-    db.flush()
+def _emit_claim_payment(db: Session, claim: Claim, amount: float) -> None:
     enqueue_event(
         db,
         event_type="ClaimPaymentRequested",
@@ -328,10 +298,91 @@ def settle(claim_id: str, body: SettleIn, db: Session = Depends(get_db), _=Depen
             "insured": claim.insured_snapshot
             or {"id": claim.insured_party_id or claim.party_id},
             "product_code": claim.product_code,
-            "amount": body.settlement_amount,
+            "amount": amount,
         },
     )
     record_event("ClaimPaymentRequested", "produced", settings.service_name)
+
+
+def _finalize_settlement(db: Session, claim: Claim, amount: float) -> ClaimOut:
+    claim.settlement_amount = amount
+    claim.status = "SETTLED"
+    db.flush()
+    _emit_claim_payment(db, claim, amount)
+    db.commit()
+    db.refresh(claim)
+    counts = _document_counts(db, [claim.id])
+    return _claim_out(claim, counts.get(claim.id, 0))
+
+
+@router.post("/{claim_id}/reserve", response_model=ClaimOut)
+def set_reserve(claim_id: str, body: ReserveUpdate, db: Session = Depends(get_db), _=Depends(claims_auth)):
+    claim = db.get(Claim, claim_id)
+    if not claim or claim.status in CLOSED_STATUSES or claim.status == "PENDING_APPROVAL":
+        raise HTTPException(400, "Claim not reservable")
+    claim.reserve_amount = body.reserve_amount
+    claim.status = "RESERVED"
+    db.commit()
+    db.refresh(claim)
+    counts = _document_counts(db, [claim.id])
+    return _claim_out(claim, counts.get(claim.id, 0))
+
+
+@router.post("/{claim_id}/investigate", response_model=ClaimOut)
+def investigate(claim_id: str, db: Session = Depends(get_db), _=Depends(claims_auth)):
+    claim = db.get(Claim, claim_id)
+    if not claim or claim.status in CLOSED_STATUSES or claim.status == "PENDING_APPROVAL":
+        raise HTTPException(400, "Invalid claim state")
+    claim.status = "INVESTIGATING"
+    db.commit()
+    db.refresh(claim)
+    counts = _document_counts(db, [claim.id])
+    return _claim_out(claim, counts.get(claim.id, 0))
+
+
+@router.post("/{claim_id}/settle", response_model=ClaimOut)
+def settle(claim_id: str, body: SettleIn, db: Session = Depends(get_db), _=Depends(claims_auth)):
+    claim = db.get(Claim, claim_id)
+    if not claim or claim.status in CLOSED_STATUSES:
+        raise HTTPException(400, "Claim not settleable")
+    if claim.status == "PENDING_APPROVAL":
+        raise HTTPException(400, "Claim is already awaiting approval")
+
+    amount = float(body.settlement_amount)
+    if amount > APPROVAL_THRESHOLD:
+        # Large settlements require an explicit approval step before payment.
+        claim.settlement_amount = amount
+        claim.status = "PENDING_APPROVAL"
+        db.commit()
+        db.refresh(claim)
+        counts = _document_counts(db, [claim.id])
+        return _claim_out(claim, counts.get(claim.id, 0))
+
+    return _finalize_settlement(db, claim, amount)
+
+
+@router.post("/{claim_id}/approve", response_model=ClaimOut)
+def approve_settlement(claim_id: str, db: Session = Depends(get_db), _=Depends(claims_auth)):
+    """Approve a large settlement (> $10,000) and release payment."""
+    claim = db.get(Claim, claim_id)
+    if not claim or claim.status != "PENDING_APPROVAL":
+        raise HTTPException(400, "Claim is not awaiting approval")
+    amount = float(claim.settlement_amount or 0)
+    if amount <= APPROVAL_THRESHOLD:
+        raise HTTPException(400, "Claim does not require approval")
+    return _finalize_settlement(db, claim, amount)
+
+
+@router.post("/{claim_id}/reject-approval", response_model=ClaimOut)
+def reject_settlement_approval(
+    claim_id: str, db: Session = Depends(get_db), _=Depends(claims_auth)
+):
+    """Reject a pending large settlement and return the claim to reservable state."""
+    claim = db.get(Claim, claim_id)
+    if not claim or claim.status != "PENDING_APPROVAL":
+        raise HTTPException(400, "Claim is not awaiting approval")
+    claim.settlement_amount = None
+    claim.status = "RESERVED" if claim.reserve_amount else "INVESTIGATING"
     db.commit()
     db.refresh(claim)
     counts = _document_counts(db, [claim.id])
@@ -341,9 +392,10 @@ def settle(claim_id: str, body: SettleIn, db: Session = Depends(get_db), _=Depen
 @router.post("/{claim_id}/deny", response_model=ClaimOut)
 def deny(claim_id: str, db: Session = Depends(get_db), _=Depends(claims_auth)):
     claim = db.get(Claim, claim_id)
-    if not claim or claim.status in ("SETTLED", "DENIED"):
+    if not claim or claim.status in CLOSED_STATUSES:
         raise HTTPException(400, "Claim not deniable")
     claim.status = "DENIED"
+    claim.settlement_amount = None
     db.commit()
     db.refresh(claim)
     counts = _document_counts(db, [claim.id])

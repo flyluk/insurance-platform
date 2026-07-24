@@ -72,8 +72,9 @@ export default function Claims() {
   const [clientPolicies, setClientPolicies] = useState<Policy[]>([]);
   const [policiesBusy, setPoliciesBusy] = useState(false);
   const [claims, setClaims] = useState<Claim[]>([]);
-  const [listTab, setListTab] = useState<"policies" | "claims">("policies");
+  const [listTab, setListTab] = useState<"policies" | "claims" | "approvals">("policies");
   const [msg, setMsg] = useState("");
+  const [settleAmount, setSettleAmount] = useState("1500");
 
   const [modalPolicy, setModalPolicy] = useState<Policy | null>(null);
   const [description, setDescription] = useState("Collision damage");
@@ -132,10 +133,19 @@ export default function Claims() {
     [claims, modalPolicy]
   );
 
+  const pendingApprovals = useMemo(
+    () => claims.filter((c) => c.status === "PENDING_APPROVAL"),
+    [claims]
+  );
+
   const policyPage = usePagination(clientPolicies);
   const claimPage = usePagination(claims);
+  const approvalPage = usePagination(pendingApprovals);
   const docPage = usePagination(docs);
   const modalClaimPage = usePagination(policyClaims);
+
+  const settleAmountNum = Number(settleAmount);
+  const needsApproval = Number.isFinite(settleAmountNum) && settleAmountNum > 10000;
 
   async function searchClients(e: FormEvent) {
     e.preventDefault();
@@ -217,14 +227,65 @@ export default function Claims() {
     }
   }
 
-  async function settle(id: string) {
-    await api.post(`/claims/${id}/settle`, { settlement_amount: 1500 });
+  async function settle(id: string, amount = settleAmountNum) {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMsg("Enter a valid settlement amount");
+      return;
+    }
+    const { data } = await api.post(`/claims/${id}/settle`, { settlement_amount: amount });
     await refreshClaims();
+    if (data.status === "PENDING_APPROVAL") {
+      setMsg(`Settlement $${amount.toFixed(2)} submitted for approval (over $10,000)`);
+      setListTab("approvals");
+    } else {
+      setMsg(`Settled claim for $${amount.toFixed(2)}`);
+    }
+  }
+
+  async function approve(id: string) {
+    const { data } = await api.post(`/claims/${id}/approve`);
+    await refreshClaims();
+    setMsg(`Approved settlement for ${data.claim_number}`);
+  }
+
+  async function rejectApproval(id: string) {
+    await api.post(`/claims/${id}/reject-approval`);
+    await refreshClaims();
+    setMsg("Settlement approval rejected");
   }
 
   async function deny(id: string) {
     await api.post(`/claims/${id}/deny`);
     await refreshClaims();
+  }
+
+  function claimActions(c: Claim) {
+    if (c.status === "PENDING_APPROVAL") {
+      return (
+        <div className="row">
+          <button className="btn" type="button" onClick={() => approve(c.id).catch(console.error)}>
+            Approve
+          </button>
+          <button className="btn ghost" type="button" onClick={() => rejectApproval(c.id).catch(console.error)}>
+            Reject
+          </button>
+          <button className="btn danger" type="button" onClick={() => deny(c.id).catch(console.error)}>
+            Deny claim
+          </button>
+        </div>
+      );
+    }
+    if (["SETTLED", "DENIED"].includes(c.status)) return null;
+    return (
+      <div className="row">
+        <button className="btn" type="button" onClick={() => settle(c.id).catch(console.error)}>
+          {needsApproval ? "Submit for approval" : `Settle $${settleAmountNum || 0}`}
+        </button>
+        <button className="btn danger" type="button" onClick={() => deny(c.id).catch(console.error)}>
+          Deny
+        </button>
+      </div>
+    );
   }
 
   async function uploadDoc(e: FormEvent) {
@@ -366,7 +427,7 @@ export default function Claims() {
       <div className="panel">
         <Tabs
           active={listTab}
-          onChange={(id) => setListTab(id as "policies" | "claims")}
+          onChange={(id) => setListTab(id as "policies" | "claims" | "approvals")}
           tabs={[
             {
               id: "policies",
@@ -374,8 +435,27 @@ export default function Claims() {
               count: clientPolicies.length,
             },
             { id: "claims", label: "All claims", count: claims.length },
+            { id: "approvals", label: "Approvals", count: pendingApprovals.length },
           ]}
         />
+
+        {(listTab === "claims" || listTab === "approvals" || (listTab === "policies" && selectedClient)) && (
+          <label style={{ maxWidth: "14rem" }}>
+            Settlement amount
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={settleAmount}
+              onChange={(e) => setSettleAmount(e.target.value)}
+            />
+            <span className="muted">
+              {needsApproval
+                ? "Over $10,000 — settle will request approval"
+                : "Amounts over $10,000 require approval"}
+            </span>
+          </label>
+        )}
 
         {listTab === "policies" && (
           <>
@@ -477,18 +557,7 @@ export default function Claims() {
                     <td>{c.document_count ?? 0}</td>
                     <td>{c.reserve_amount}</td>
                     <td>{c.settlement_amount ?? "—"}</td>
-                    <td className="row">
-                      {!["SETTLED", "DENIED"].includes(c.status) && (
-                        <>
-                          <button className="btn" type="button" onClick={() => settle(c.id)}>
-                            Settle $1500
-                          </button>
-                          <button className="btn danger" type="button" onClick={() => deny(c.id)}>
-                            Deny
-                          </button>
-                        </>
-                      )}
-                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>{claimActions(c)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -500,6 +569,51 @@ export default function Claims() {
               pageSize={claimPage.pageSize}
               onPageChange={claimPage.setPage}
               onPageSizeChange={claimPage.setPageSize}
+            />
+          </>
+        )}
+
+        {listTab === "approvals" && (
+          <>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Settlements over $10,000 wait here until approved.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Claim</th>
+                  <th>Product</th>
+                  <th>Proposed amount</th>
+                  <th>Owner</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {approvalPage.pageItems.map((c) => (
+                  <tr key={c.id}>
+                    <td>{c.claim_number}</td>
+                    <td>{c.product_code}</td>
+                    <td>${Number(c.settlement_amount || 0).toFixed(2)}</td>
+                    <td>{c.owner?.full_name || "—"}</td>
+                    <td>{claimActions(c)}</td>
+                  </tr>
+                ))}
+                {!pendingApprovals.length && (
+                  <tr>
+                    <td colSpan={5} className="muted">
+                      No settlements awaiting approval.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <Pagination
+              page={approvalPage.page}
+              totalPages={approvalPage.totalPages}
+              total={approvalPage.total}
+              pageSize={approvalPage.pageSize}
+              onPageChange={approvalPage.setPage}
+              onPageSizeChange={approvalPage.setPageSize}
             />
           </>
         )}
@@ -584,32 +698,7 @@ export default function Claims() {
                     </td>
                     <td>{c.document_count ?? 0}</td>
                     <td>{c.reserve_amount}</td>
-                    <td className="row">
-                      {!["SETTLED", "DENIED"].includes(c.status) && (
-                        <>
-                          <button
-                            className="btn"
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              settle(c.id);
-                            }}
-                          >
-                            Settle $1500
-                          </button>
-                          <button
-                            className="btn danger"
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deny(c.id);
-                            }}
-                          >
-                            Deny
-                          </button>
-                        </>
-                      )}
-                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>{claimActions(c)}</td>
                   </tr>
                 ))}
                 {!policyClaims.length && (
