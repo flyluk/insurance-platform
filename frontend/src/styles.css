@@ -257,9 +257,43 @@ a.linkish { text-decoration: underline; }
   color: var(--muted);
 }
 
+.clickable-row { cursor: pointer; }
+.clickable-row:hover { background: rgba(15, 106, 86, 0.05); }
+.clickable-row:focus-visible {
+  outline: 2px solid rgba(15, 106, 86, 0.35);
+  outline-offset: -2px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(20, 32, 27, 0.45);
+  backdrop-filter: blur(3px);
+  animation: fade-in 0.18s ease both;
+}
+.modal-panel {
+  width: min(640px, 100%);
+  max-height: min(85vh, 900px);
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+  animation: rise 0.22s ease both;
+}
+
 @keyframes rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (max-width: 760px) {

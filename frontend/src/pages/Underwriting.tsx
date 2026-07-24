@@ -7,6 +7,7 @@ import { flattenRiskEntries } from "../utils/formatRisk";
 type Case = {
   id: string;
   application_id: string;
+  application_number?: string | null;
   party_id: string;
   insured_party_id?: string | null;
   product_code: string;
@@ -108,6 +109,7 @@ export default function Underwriting() {
           <table>
             <thead>
               <tr>
+                <th>Application</th>
                 <th>Product</th>
                 <th>Owner</th>
                 <th>Insured</th>
@@ -121,9 +123,10 @@ export default function Underwriting() {
                 <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
                   <td>
                     <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
-                      {c.product_code}
+                      {c.application_number || c.product_code}
                     </button>
                   </td>
+                  <td>{c.product_code}</td>
                   <td><PartyCell party={c.owner} /></td>
                   <td><PartyCell party={c.insured} /></td>
                   <td>{c.annual_premium}</td>
@@ -140,7 +143,7 @@ export default function Underwriting() {
               ))}
               {!queue.length && (
                 <tr>
-                  <td colSpan={6} className="muted">
+                  <td colSpan={7} className="muted">
                     No referrals waiting
                   </td>
                 </tr>
@@ -183,7 +186,7 @@ export default function Underwriting() {
                 </div>
                 <div className="detail-row">
                   <span className="muted">Application</span>
-                  <strong className="mono">{selected.application_id}</strong>
+                  <strong className="mono">{selected.application_number || "—"}</strong>
                 </div>
               </div>
               <h4>Parties</h4>
@@ -218,19 +221,21 @@ export default function Underwriting() {
       <div className="panel">
         <h3>All cases</h3>
         <table>
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Status</th>
-              <th>Auto</th>
-              <th>Final</th>
-              <th>Reason</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {all.map((c) => (
+            <thead>
+              <tr>
+                <th>Application</th>
+                <th>Product</th>
+                <th>Status</th>
+                <th>Auto</th>
+                <th>Final</th>
+                <th>Reason</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {all.map((c) => (
               <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
+                <td className="mono">{c.application_number || "—"}</td>
                 <td>{c.product_code}</td>
                 <td>
                   <span className={`badge ${c.status === "REFERRED" ? "warn" : c.status === "DECLINED" ? "bad" : ""}`}>

@@ -57,11 +57,25 @@ def test_create_rate_quote(api_client, agent_headers):
     assert body["annual_premium"] > 0
 
 
+def test_submit_application_has_readable_number(api_client, agent_headers):
+    """Submitted applications expose APP-{PRODUCT}-###### codes."""
+    _, quote = create_auto_quote(api_client, agent_headers)
+    rated = api_client.post(f"/api/nb/quotes/{quote['id']}/rate", headers=agent_headers)
+    assert rated.status_code == 200
+    submitted = api_client.post(f"/api/nb/quotes/{quote['id']}/submit", headers=agent_headers)
+    assert submitted.status_code == 200, submitted.text
+    app = submitted.json()
+    assert app["application_number"].startswith("APP-AUTO-")
+    assert len(app["application_number"]) >= len("APP-AUTO-XXXXXX")
+
+
 def test_list_applications(api_client, agent_headers):
     """List new-business applications."""
     resp = api_client.get("/api/nb/applications", headers=agent_headers)
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
+    for app in resp.json():
+        assert app.get("application_number")
 
 
 def test_search_parties_by_name(api_client, agent_headers):

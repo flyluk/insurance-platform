@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -15,6 +17,10 @@ from insurance_shared.parties import party_snapshot, summary_from_snapshot
 router = APIRouter(prefix="/api/nb", tags=["new-business"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
 agent_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "agent", "admin")
+
+
+def _application_number(product_code: str) -> str:
+    return f"APP-{product_code}-{uuid.uuid4().hex[:6].upper()}"
 
 
 def _quote_out(db: Session, quote: Quote) -> QuoteOut:
@@ -242,6 +248,7 @@ def submit_application(quote_id: str, db: Session = Depends(get_db), _=Depends(a
     owner = db.get(Party, quote.party_id)
     insured = db.get(Party, insured_id)
     app = Application(
+        application_number=_application_number(quote.product_code),
         quote_id=quote.id,
         party_id=quote.party_id,
         insured_party_id=insured_id,
@@ -256,6 +263,7 @@ def submit_application(quote_id: str, db: Session = Depends(get_db), _=Depends(a
 
     payload = {
         "application_id": app.id,
+        "application_number": app.application_number,
         "quote_id": quote.id,
         "party_id": quote.party_id,
         "owner_party_id": quote.party_id,

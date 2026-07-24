@@ -79,6 +79,7 @@ def _emit_bound(db: Session, policy: Policy) -> None:
         "policy_id": policy.id,
         "policy_number": policy.policy_number,
         "application_id": policy.application_id,
+        "application_number": policy.application_number,
         "party_id": policy.party_id,
         "owner_party_id": policy.owner_party_id or policy.party_id,
         "insured_party_id": policy.insured_party_id or policy.party_id,

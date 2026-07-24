@@ -9,6 +9,7 @@ type Policy = {
   id: string;
   policy_number: string;
   application_id: string;
+  application_number?: string | null;
   party_id: string;
   insured_party_id?: string | null;
   product_code: string;
@@ -270,12 +271,12 @@ export default function PolicyDetail() {
           <h3>Policy details</h3>
           <div className="detail-grid">
             <div className="detail-row">
-              <span className="muted">Policy ID</span>
-              <strong className="mono">{policy.id}</strong>
+              <span className="muted">Policy number</span>
+              <strong className="mono">{policy.policy_number}</strong>
             </div>
             <div className="detail-row">
               <span className="muted">Application</span>
-              <strong className="mono">{policy.application_id}</strong>
+              <strong className="mono">{policy.application_number || "—"}</strong>
             </div>
             <div className="detail-row">
               <span className="muted">Product</span>

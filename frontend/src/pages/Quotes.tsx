@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import api from "../api/client";
-import { PartyCell, PartySummary } from "../components/PartyDetails";
+import PartyDetails, { PartyCell, PartySummary } from "../components/PartyDetails";
+import { flattenRiskEntries } from "../utils/formatRisk";
 
 type Party = {
   id: string;
@@ -59,11 +60,18 @@ type ProductPlan = {
 
 type Application = {
   id: string;
+  application_number: string;
   quote_id: string;
   product_code: string;
   status: string;
   annual_premium: number;
   uw_decision: string | null;
+  uw_reason?: string | null;
+  policy_id?: string | null;
+  policy_number?: string | null;
+  risk_attributes?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
   owner?: PartySummary | null;
   insured?: PartySummary | null;
 };
@@ -96,6 +104,7 @@ export default function Quotes() {
   const [selectedRiders, setSelectedRiders] = useState<string[]>([]);
   const [risk, setRisk] = useState<Record<string, unknown>>({});
   const [msg, setMsg] = useState("");
+  const [selectedApp, setSelectedApp] = useState<Application | null>(null);
 
   async function refresh() {
     const [q, a] = await Promise.all([
@@ -109,6 +118,15 @@ export default function Quotes() {
   useEffect(() => {
     refresh().catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (!selectedApp) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedApp(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedApp]);
 
   useEffect(() => {
     let cancelled = false;
@@ -568,17 +586,35 @@ export default function Quotes() {
         <table>
           <thead>
             <tr>
+              <th>Application</th>
               <th>Product</th>
               <th>Owner</th>
               <th>Insured</th>
               <th>Status</th>
               <th>UW</th>
               <th>Premium</th>
+              <th>Policy</th>
             </tr>
           </thead>
           <tbody>
             {apps.map((a) => (
-              <tr key={a.id}>
+              <tr
+                key={a.id}
+                className="clickable-row"
+                onClick={() => setSelectedApp(a)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedApp(a);
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label={`View application ${a.application_number}`}
+              >
+                <td>
+                  <span className="linkish">{a.application_number}</span>
+                </td>
                 <td>{a.product_code}</td>
                 <td><PartyCell party={a.owner} /></td>
                 <td><PartyCell party={a.insured} /></td>
@@ -587,11 +623,87 @@ export default function Quotes() {
                 </td>
                 <td>{a.uw_decision || "—"}</td>
                 <td>{a.annual_premium}</td>
+                <td>{a.policy_number || "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {selectedApp && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setSelectedApp(null)}
+          role="presentation"
+        >
+          <div
+            className="modal-panel stack"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="app-detail-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h3 id="app-detail-title" style={{ margin: 0 }}>
+                {selectedApp.application_number}
+              </h3>
+              <button className="btn ghost" type="button" onClick={() => setSelectedApp(null)}>
+                Close
+              </button>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-row">
+                <span className="muted">Product</span>
+                <strong>{selectedApp.product_code}</strong>
+              </div>
+              <div className="detail-row">
+                <span className="muted">Status</span>
+                <span className="badge">{selectedApp.status}</span>
+              </div>
+              <div className="detail-row">
+                <span className="muted">UW decision</span>
+                <strong>{selectedApp.uw_decision || "—"}</strong>
+              </div>
+              <div className="detail-row">
+                <span className="muted">UW reason</span>
+                <strong>{selectedApp.uw_reason || "—"}</strong>
+              </div>
+              <div className="detail-row">
+                <span className="muted">Annual premium</span>
+                <strong>${Number(selectedApp.annual_premium).toFixed(2)}</strong>
+              </div>
+              <div className="detail-row">
+                <span className="muted">Policy</span>
+                <strong className="mono">{selectedApp.policy_number || "—"}</strong>
+              </div>
+              {selectedApp.created_at && (
+                <div className="detail-row">
+                  <span className="muted">Submitted</span>
+                  <strong>{selectedApp.created_at.slice(0, 19).replace("T", " ")}</strong>
+                </div>
+              )}
+            </div>
+            <h4>Parties</h4>
+            <div className="party-pair">
+              <PartyDetails role="Owner" party={selectedApp.owner} />
+              <PartyDetails role="Insured" party={selectedApp.insured} />
+            </div>
+            <h4>Risk attributes</h4>
+            <div className="detail-grid">
+              {selectedApp.risk_attributes && Object.keys(selectedApp.risk_attributes).length
+                ? flattenRiskEntries(selectedApp.risk_attributes).map((row) => (
+                    <div key={row.key} className="detail-row">
+                      <span className="muted">{row.label}</span>
+                      <strong className="risk-value">{row.value}</strong>
+                    </div>
+                  ))
+                : (
+                  <span className="muted">None</span>
+                )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
