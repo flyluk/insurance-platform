@@ -55,6 +55,14 @@ docker compose up --build
 
 The policyholder account is linked to seeded **owner** party Alex Rivera, a separate **insured** Jordan Lee on demo policy `AUTO-DEMO0001`, and an open premium invoice for self-serve pay and FNOL demos.
 
+Startup also seeds a broader testing set: extra clients (Sam Chen, Riley Quinn, Morgan Blake, Avery Kim, Casey Rivera), policies across AUTO/HOME/LIFE (plus one cancelled), NB quotes/applications, UW queue cases, open/paid invoices, and claims including `CLM-DEMO-HI01` awaiting approval for a settlement over $10,000.
+
+To wipe local databases and reload seeds:
+
+```bash
+./scripts/reset-demo-data.sh
+```
+
 ### Policy owner vs insured
 
 Quotes, applications, UW cases, policies, claims, and invoices distinguish:

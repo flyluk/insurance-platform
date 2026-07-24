@@ -30,6 +30,13 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     OutboxBase.metadata.create_all(bind=engine)
     _ensure_party_columns()
+    db = SessionLocal()
+    try:
+        from app.seed import seed_demo_claims
+
+        seed_demo_claims(db)
+    finally:
+        db.close()
     async with event_runtime(SessionLocal, poll_seconds=settings.outbox_poll_seconds, enable_outbox=True):
         yield
 
