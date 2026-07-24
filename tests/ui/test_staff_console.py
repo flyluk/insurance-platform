@@ -95,11 +95,14 @@ def test_underwriting_case_details(page: Page, ui_base: str, api_client, agent_h
     nav(page).get_by_role("link", name="Underwriting").click()
     expect(page.get_by_role("heading", name="Underwriting")).to_be_visible()
 
-    details_btn = page.get_by_role("button", name="Details").first
-    expect(details_btn).to_be_visible(timeout=15000)
-    details_btn.click()
-    expect(page.get_by_role("heading", name="Case details")).to_be_visible()
-    expect(page.get_by_text("Risk attributes")).to_be_visible()
+    app_code = application.get("application_number") or application["id"]
+    app_link = page.get_by_role("button", name=app_code).first
+    expect(app_link).to_be_visible(timeout=15000)
+    app_link.click()
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_be_visible()
+    expect(dialog.get_by_text("Risk attributes")).to_be_visible()
+    expect(dialog.get_by_text(app_code)).to_be_visible()
 
 
 @pytest.mark.story("KAN-3")
