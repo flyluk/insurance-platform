@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import api from "../api/client";
 import Pagination, { usePagination } from "../components/Pagination";
 import PartyDetails, { PartyCell, PartySummary } from "../components/PartyDetails";
+import Tabs from "../components/Tabs";
 import { flattenRiskEntries } from "../utils/formatRisk";
 
 type Party = {
@@ -107,6 +108,7 @@ export default function Quotes() {
   const [msg, setMsg] = useState("");
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [policyByAppId, setPolicyByAppId] = useState<Record<string, string>>({});
+  const [listTab, setListTab] = useState<"quotes" | "applications">("quotes");
 
   async function refresh() {
     const [q, a, p] = await Promise.all([
@@ -557,106 +559,120 @@ export default function Quotes() {
         </form>
       </div>
       <div className="panel">
-        <h3>Quotes</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Owner</th>
-              <th>Insured</th>
-              <th>Status</th>
-              <th>Premium</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {quotePage.pageItems.map((q) => (
-              <tr key={q.id}>
-                <td>{q.product_code}</td>
-                <td><PartyCell party={q.owner} /></td>
-                <td><PartyCell party={q.insured} /></td>
-                <td>
-                  <span className="badge">{q.status}</span>
-                </td>
-                <td>{q.annual_premium ?? "—"}</td>
-                <td className="row">
-                  {q.status === "DRAFT" && (
-                    <button className="btn ghost" type="button" onClick={() => rate(q.id)}>
-                      Rate
-                    </button>
-                  )}
-                  {q.status === "RATED" && (
-                    <button className="btn" type="button" onClick={() => submit(q.id)}>
-                      Submit
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <Pagination
-          page={quotePage.page}
-          totalPages={quotePage.totalPages}
-          total={quotePage.total}
-          pageSize={quotePage.pageSize}
-          onPageChange={quotePage.setPage}
+        <Tabs
+          active={listTab}
+          onChange={(id) => setListTab(id as "quotes" | "applications")}
+          tabs={[
+            { id: "quotes", label: "Quotes", count: quotes.length },
+            { id: "applications", label: "Applications", count: apps.length },
+          ]}
         />
-      </div>
-      <div className="panel">
-        <h3>Applications</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Application</th>
-              <th>Product</th>
-              <th>Owner</th>
-              <th>Insured</th>
-              <th>Status</th>
-              <th>UW</th>
-              <th>Premium</th>
-              <th>Policy</th>
-            </tr>
-          </thead>
-          <tbody>
-            {appPage.pageItems.map((a) => (
-              <tr
-                key={a.id}
-                className="clickable-row"
-                onClick={() => setSelectedApp(a)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelectedApp(a);
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-                aria-label={`View application ${a.application_number}`}
-              >
-                <td>
-                  <span className="linkish">{a.application_number}</span>
-                </td>
-                <td>{a.product_code}</td>
-                <td><PartyCell party={a.owner} /></td>
-                <td><PartyCell party={a.insured} /></td>
-                <td>
-                  <span className="badge">{a.status}</span>
-                </td>
-                <td>{a.uw_decision || "—"}</td>
-                <td>{a.annual_premium}</td>
-                <td>{appPolicyNumber(a) || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <Pagination
-          page={appPage.page}
-          totalPages={appPage.totalPages}
-          total={appPage.total}
-          pageSize={appPage.pageSize}
-          onPageChange={appPage.setPage}
-        />
+
+        {listTab === "quotes" && (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Owner</th>
+                  <th>Insured</th>
+                  <th>Status</th>
+                  <th>Premium</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {quotePage.pageItems.map((q) => (
+                  <tr key={q.id}>
+                    <td>{q.product_code}</td>
+                    <td><PartyCell party={q.owner} /></td>
+                    <td><PartyCell party={q.insured} /></td>
+                    <td>
+                      <span className="badge">{q.status}</span>
+                    </td>
+                    <td>{q.annual_premium ?? "—"}</td>
+                    <td className="row">
+                      {q.status === "DRAFT" && (
+                        <button className="btn ghost" type="button" onClick={() => rate(q.id)}>
+                          Rate
+                        </button>
+                      )}
+                      {q.status === "RATED" && (
+                        <button className="btn" type="button" onClick={() => submit(q.id)}>
+                          Submit
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              page={quotePage.page}
+              totalPages={quotePage.totalPages}
+              total={quotePage.total}
+              pageSize={quotePage.pageSize}
+              onPageChange={quotePage.setPage}
+            />
+          </>
+        )}
+
+        {listTab === "applications" && (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Application</th>
+                  <th>Product</th>
+                  <th>Owner</th>
+                  <th>Insured</th>
+                  <th>Status</th>
+                  <th>UW</th>
+                  <th>Premium</th>
+                  <th>Policy</th>
+                </tr>
+              </thead>
+              <tbody>
+                {appPage.pageItems.map((a) => (
+                  <tr
+                    key={a.id}
+                    className="clickable-row"
+                    onClick={() => setSelectedApp(a)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedApp(a);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View application ${a.application_number}`}
+                  >
+                    <td>
+                      <span className="linkish">{a.application_number}</span>
+                    </td>
+                    <td>{a.product_code}</td>
+                    <td><PartyCell party={a.owner} /></td>
+                    <td><PartyCell party={a.insured} /></td>
+                    <td>
+                      <span className="badge">{a.status}</span>
+                    </td>
+                    <td>{a.uw_decision || "—"}</td>
+                    <td>{a.annual_premium}</td>
+                    <td>{appPolicyNumber(a) || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              page={appPage.page}
+              totalPages={appPage.totalPages}
+              total={appPage.total}
+              pageSize={appPage.pageSize}
+              onPageChange={appPage.setPage}
+            />
+          </>
+        )}
       </div>
 
       {selectedApp && (

@@ -95,6 +95,7 @@ def test_underwriting_case_details(page: Page, ui_base: str, api_client, agent_h
     nav(page).get_by_role("link", name="Underwriting").click()
     expect(page.get_by_role("heading", name="Underwriting")).to_be_visible()
 
+    page.get_by_role("tab", name=re.compile(r"All cases")).click()
     app_code = application.get("application_number") or application["id"]
     app_link = page.get_by_role("button", name=app_code).first
     expect(app_link).to_be_visible(timeout=15000)

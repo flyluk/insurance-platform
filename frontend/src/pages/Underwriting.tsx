@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../api/client";
 import Pagination, { usePagination } from "../components/Pagination";
 import PartyDetails, { PartyCell, PartySummary } from "../components/PartyDetails";
+import Tabs from "../components/Tabs";
 import { flattenRiskEntries } from "../utils/formatRisk";
 
 type Case = {
@@ -45,9 +46,12 @@ function appLabel(c: Case): string {
   return c.application_number || c.application_id;
 }
 
+type UwTab = "queue" | "all";
+
 export default function Underwriting() {
   const [queue, setQueue] = useState<Case[]>([]);
   const [all, setAll] = useState<Case[]>([]);
+  const [tab, setTab] = useState<UwTab>("queue");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectionVersion, setSelectionVersion] = useState(0);
   const [selected, setSelected] = useState<Case | null>(null);
@@ -125,101 +129,114 @@ export default function Underwriting() {
       </div>
 
       <div className="panel">
-        <h3>Referral queue</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Application</th>
-              <th>Product</th>
-              <th>Owner</th>
-              <th>Insured</th>
-              <th>Premium</th>
-              <th>Reason</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {queuePage.pageItems.map((c) => (
-              <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
-                <td>
-                  <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
-                    {appLabel(c)}
-                  </button>
-                </td>
-                <td>{c.product_code}</td>
-                <td><PartyCell party={c.owner} /></td>
-                <td><PartyCell party={c.insured} /></td>
-                <td>{c.annual_premium}</td>
-                <td>{c.reason}</td>
-                <td className="row">
-                  <button className="btn" type="button" onClick={() => decide(c.id, "ACCEPT")}>
-                    Accept
-                  </button>
-                  <button className="btn danger" type="button" onClick={() => decide(c.id, "DECLINE")}>
-                    Decline
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!queue.length && (
-              <tr>
-                <td colSpan={7} className="muted">
-                  No referrals waiting
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        <Pagination
-          page={queuePage.page}
-          totalPages={queuePage.totalPages}
-          total={queuePage.total}
-          pageSize={queuePage.pageSize}
-          onPageChange={queuePage.setPage}
+        <Tabs
+          active={tab}
+          onChange={(id) => setTab(id as UwTab)}
+          tabs={[
+            { id: "queue", label: "Referral queue", count: queue.length },
+            { id: "all", label: "All cases", count: all.length },
+          ]}
         />
-      </div>
 
-      <div className="panel">
-        <h3>All cases</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Application</th>
-              <th>Product</th>
-              <th>Status</th>
-              <th>Auto</th>
-              <th>Final</th>
-              <th>Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allPage.pageItems.map((c) => (
-              <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
-                <td>
-                  <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
-                    {appLabel(c)}
-                  </button>
-                </td>
-                <td>{c.product_code}</td>
-                <td>
-                  <span className={`badge ${c.status === "REFERRED" ? "warn" : c.status === "DECLINED" ? "bad" : ""}`}>
-                    {c.status}
-                  </span>
-                </td>
-                <td>{c.auto_decision}</td>
-                <td>{c.final_decision || "—"}</td>
-                <td>{c.reason}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <Pagination
-          page={allPage.page}
-          totalPages={allPage.totalPages}
-          total={allPage.total}
-          pageSize={allPage.pageSize}
-          onPageChange={allPage.setPage}
-        />
+        {tab === "queue" && (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Application</th>
+                  <th>Product</th>
+                  <th>Owner</th>
+                  <th>Insured</th>
+                  <th>Premium</th>
+                  <th>Reason</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {queuePage.pageItems.map((c) => (
+                  <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
+                    <td>
+                      <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
+                        {appLabel(c)}
+                      </button>
+                    </td>
+                    <td>{c.product_code}</td>
+                    <td><PartyCell party={c.owner} /></td>
+                    <td><PartyCell party={c.insured} /></td>
+                    <td>{c.annual_premium}</td>
+                    <td>{c.reason}</td>
+                    <td className="row">
+                      <button className="btn" type="button" onClick={() => decide(c.id, "ACCEPT")}>
+                        Accept
+                      </button>
+                      <button className="btn danger" type="button" onClick={() => decide(c.id, "DECLINE")}>
+                        Decline
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {!queue.length && (
+                  <tr>
+                    <td colSpan={7} className="muted">
+                      No referrals waiting
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <Pagination
+              page={queuePage.page}
+              totalPages={queuePage.totalPages}
+              total={queuePage.total}
+              pageSize={queuePage.pageSize}
+              onPageChange={queuePage.setPage}
+            />
+          </>
+        )}
+
+        {tab === "all" && (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Application</th>
+                  <th>Product</th>
+                  <th>Status</th>
+                  <th>Auto</th>
+                  <th>Final</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allPage.pageItems.map((c) => (
+                  <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
+                    <td>
+                      <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
+                        {appLabel(c)}
+                      </button>
+                    </td>
+                    <td>{c.product_code}</td>
+                    <td>
+                      <span className={`badge ${c.status === "REFERRED" ? "warn" : c.status === "DECLINED" ? "bad" : ""}`}>
+                        {c.status}
+                      </span>
+                    </td>
+                    <td>{c.auto_decision}</td>
+                    <td>{c.final_decision || "—"}</td>
+                    <td>{c.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              page={allPage.page}
+              totalPages={allPage.totalPages}
+              total={allPage.total}
+              pageSize={allPage.pageSize}
+              onPageChange={allPage.setPage}
+            />
+          </>
+        )}
       </div>
 
       {selectedId && (

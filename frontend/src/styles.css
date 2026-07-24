@@ -264,6 +264,47 @@ a.linkish { text-decoration: underline; }
   cursor: not-allowed;
   transform: none;
 }
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.55);
+}
+.tab {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font: inherit;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tab:hover { color: var(--ink); background: rgba(15, 106, 86, 0.06); }
+.tab.active {
+  background: rgba(15, 106, 86, 0.12);
+  color: var(--accent);
+  font-weight: 600;
+}
+.tab-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(20, 32, 27, 0.08);
+  color: inherit;
+}
+.tab.active .tab-count {
+  background: rgba(15, 106, 86, 0.16);
+}
 .hint {
   margin-top: 1rem;
   padding-top: 1rem;
