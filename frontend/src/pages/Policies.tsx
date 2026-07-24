@@ -34,6 +34,7 @@ export default function Policies() {
     page,
     setPage,
     pageSize,
+    setPageSize,
     total,
     totalPages,
     pageItems,

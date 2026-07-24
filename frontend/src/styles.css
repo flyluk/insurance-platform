@@ -264,6 +264,20 @@ a.linkish { text-decoration: underline; }
   cursor: not-allowed;
   transform: none;
 }
+.pagination-meta { gap: 0.85rem; }
+.page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.page-size select {
+  width: auto;
+  min-width: 4.5rem;
+  padding: 0.35rem 0.55rem;
+}
 
 .tabs {
   display: flex;
