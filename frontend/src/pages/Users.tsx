@@ -65,6 +65,7 @@ export default function Users() {
   const { user: currentUser, adoptSession } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [tab, setTab] = useState<UsersTab>("staff");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [msg, setMsg] = useState("");
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [form, setForm] = useState<EditForm>(emptyForm());
@@ -189,8 +190,21 @@ export default function Users() {
     () => users.filter((u) => u.role === "policyholder"),
     [users],
   );
-  const visibleUsers = tab === "staff" ? staffUsers : clientUsers;
+  const tabUsers = tab === "staff" ? staffUsers : clientUsers;
+  const roleOptions = useMemo(() => {
+    const roles = Array.from(new Set(tabUsers.map((u) => u.role))).sort();
+    return roles;
+  }, [tabUsers]);
+  const visibleUsers = useMemo(() => {
+    if (roleFilter === "all") return tabUsers;
+    return tabUsers.filter((u) => u.role === roleFilter);
+  }, [tabUsers, roleFilter]);
   const page = usePagination(visibleUsers);
+
+  function changeTab(id: UsersTab) {
+    setTab(id);
+    setRoleFilter("all");
+  }
 
   return (
     <div className="stack">
@@ -206,12 +220,27 @@ export default function Users() {
       <div className="panel stack">
         <Tabs
           active={tab}
-          onChange={(id) => setTab(id as UsersTab)}
+          onChange={(id) => changeTab(id as UsersTab)}
           tabs={[
             { id: "staff", label: "Staff", count: staffUsers.length },
             { id: "clients", label: "Clients", count: clientUsers.length },
           ]}
         />
+        <label className="filter-field">
+          Role
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            aria-label="Filter by role"
+          >
+            <option value="all">All roles</option>
+            {roleOptions.map((role) => (
+              <option key={role} value={role}>
+                {role}
+              </option>
+            ))}
+          </select>
+        </label>
         <table>
           <thead>
             <tr>
@@ -259,7 +288,11 @@ export default function Users() {
             {!visibleUsers.length && (
               <tr>
                 <td colSpan={tab === "clients" ? 6 : 5} className="muted">
-                  {tab === "staff" ? "No staff users found." : "No client users found."}
+                  {roleFilter !== "all"
+                    ? `No ${tab === "staff" ? "staff" : "client"} users with role ${roleFilter}.`
+                    : tab === "staff"
+                      ? "No staff users found."
+                      : "No client users found."}
                 </td>
               </tr>
             )}
