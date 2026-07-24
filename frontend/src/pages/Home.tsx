@@ -11,7 +11,10 @@ export default function Home() {
         entries across AUTO, HOME, and LIFE.
       </p>
       <div className="row">
-        <Link className="btn" to="/quotes">
+        <Link className="btn" to="/clients">
+          Clients
+        </Link>
+        <Link className="btn ghost" to="/quotes">
           New Business
         </Link>
         <Link className="btn ghost" to="/policies">
