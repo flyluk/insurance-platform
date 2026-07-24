@@ -46,6 +46,16 @@ function appLabel(c: Case): string {
   return c.application_number || c.application_id;
 }
 
+function needsReview(status: string): boolean {
+  return status === "PENDING" || status === "REFERRED";
+}
+
+function statusBadgeClass(status: string): string {
+  if (status === "REFERRED" || status === "PENDING") return "warn";
+  if (status === "DECLINED") return "bad";
+  return "";
+}
+
 type UwTab = "queue" | "all";
 
 export default function Underwriting() {
@@ -125,7 +135,7 @@ export default function Underwriting() {
     <div className="stack">
       <div className="hero">
         <h1>Underwriting</h1>
-        <p>Referral queue and automated decisions across AUTO, HOME, and LIFE.</p>
+        <p>Review queue for pending and referred cases across AUTO, HOME, and LIFE.</p>
       </div>
 
       <div className="panel">
@@ -133,7 +143,7 @@ export default function Underwriting() {
           active={tab}
           onChange={(id) => setTab(id as UwTab)}
           tabs={[
-            { id: "queue", label: "Referral queue", count: queue.length },
+            { id: "queue", label: "Review queue", count: queue.length },
             { id: "all", label: "All cases", count: all.length },
           ]}
         />
@@ -145,6 +155,7 @@ export default function Underwriting() {
                 <tr>
                   <th>Application</th>
                   <th>Product</th>
+                  <th>Status</th>
                   <th>Owner</th>
                   <th>Insured</th>
                   <th>Premium</th>
@@ -161,24 +172,31 @@ export default function Underwriting() {
                       </button>
                     </td>
                     <td>{c.product_code}</td>
+                    <td>
+                      <span className={`badge ${statusBadgeClass(c.status)}`}>{c.status}</span>
+                    </td>
                     <td><PartyCell party={c.owner} /></td>
                     <td><PartyCell party={c.insured} /></td>
                     <td>{c.annual_premium}</td>
                     <td>{c.reason}</td>
                     <td className="row">
-                      <button className="btn" type="button" onClick={() => decide(c.id, "ACCEPT")}>
-                        Accept
-                      </button>
-                      <button className="btn danger" type="button" onClick={() => decide(c.id, "DECLINE")}>
-                        Decline
-                      </button>
+                      {needsReview(c.status) && (
+                        <>
+                          <button className="btn" type="button" onClick={() => decide(c.id, "ACCEPT")}>
+                            Accept
+                          </button>
+                          <button className="btn danger" type="button" onClick={() => decide(c.id, "DECLINE")}>
+                            Decline
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
                 {!queue.length && (
                   <tr>
-                    <td colSpan={7} className="muted">
-                      No referrals waiting
+                    <td colSpan={8} className="muted">
+                      No cases waiting for review
                     </td>
                   </tr>
                 )}
@@ -206,6 +224,7 @@ export default function Underwriting() {
                   <th>Auto</th>
                   <th>Final</th>
                   <th>Reason</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -218,13 +237,23 @@ export default function Underwriting() {
                     </td>
                     <td>{c.product_code}</td>
                     <td>
-                      <span className={`badge ${c.status === "REFERRED" ? "warn" : c.status === "DECLINED" ? "bad" : ""}`}>
-                        {c.status}
-                      </span>
+                      <span className={`badge ${statusBadgeClass(c.status)}`}>{c.status}</span>
                     </td>
                     <td>{c.auto_decision}</td>
                     <td>{c.final_decision || "—"}</td>
                     <td>{c.reason}</td>
+                    <td className="row">
+                      {needsReview(c.status) && (
+                        <>
+                          <button className="btn" type="button" onClick={() => decide(c.id, "ACCEPT")}>
+                            Accept
+                          </button>
+                          <button className="btn danger" type="button" onClick={() => decide(c.id, "DECLINE")}>
+                            Decline
+                          </button>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -264,9 +293,7 @@ export default function Underwriting() {
                 <div className="detail-grid">
                   <div className="detail-row">
                     <span className="muted">Status</span>
-                    <span className={`badge ${selected.status === "REFERRED" ? "warn" : selected.status === "DECLINED" ? "bad" : ""}`}>
-                      {selected.status}
-                    </span>
+                    <span className={`badge ${statusBadgeClass(selected.status)}`}>{selected.status}</span>
                   </div>
                   <div className="detail-row">
                     <span className="muted">Product</span>
@@ -317,7 +344,7 @@ export default function Underwriting() {
                 {selected.final_decision === "ACCEPT" && !linkedPolicy && (
                   <p className="muted">Accepted — policy may still be binding. Refresh shortly.</p>
                 )}
-                {selected.status === "REFERRED" && (
+                {needsReview(selected.status) && (
                   <div className="row">
                     <button className="btn" type="button" onClick={() => decide(selected.id, "ACCEPT")}>
                       Accept

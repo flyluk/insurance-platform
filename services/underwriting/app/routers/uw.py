@@ -93,10 +93,11 @@ def get_case(case_id: str, db: Session = Depends(get_db), _=Depends(auth)):
 
 
 @router.get("/api/uw/queue", response_model=list[CaseOut])
-def referral_queue(db: Session = Depends(get_db), _=Depends(uw_auth)):
+def review_queue(db: Session = Depends(get_db), _=Depends(uw_auth)):
+    """Cases awaiting underwriter action: pending review or referred."""
     cases = (
         db.query(UnderwritingCase)
-        .filter(UnderwritingCase.status == "REFERRED")
+        .filter(UnderwritingCase.status.in_(("PENDING", "REFERRED")))
         .order_by(UnderwritingCase.created_at)
         .all()
     )

@@ -13,10 +13,12 @@ def test_list_uw_cases(api_client, underwriter_headers):
 
 @pytest.mark.story("KAN-3")
 def test_list_uw_queue(api_client, underwriter_headers):
-    """Underwriter can list the referral queue."""
+    """Underwriter can list the review queue (pending + referred)."""
     resp = api_client.get("/api/uw/queue", headers=underwriter_headers)
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    cases = resp.json()
+    assert isinstance(cases, list)
+    assert all(c["status"] in ("PENDING", "REFERRED") for c in cases)
 
 
 @pytest.mark.story("KAN-3")
