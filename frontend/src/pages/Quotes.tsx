@@ -105,14 +105,21 @@ export default function Quotes() {
   const [risk, setRisk] = useState<Record<string, unknown>>({});
   const [msg, setMsg] = useState("");
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [policyByAppId, setPolicyByAppId] = useState<Record<string, string>>({});
 
   async function refresh() {
-    const [q, a] = await Promise.all([
+    const [q, a, p] = await Promise.all([
       api.get("/nb/quotes"),
       api.get("/nb/applications"),
+      api.get("/policies").catch(() => ({ data: [] })),
     ]);
     setQuotes(q.data);
     setApps(a.data);
+    const map: Record<string, string> = {};
+    for (const pol of p.data as { application_id?: string; policy_number?: string }[]) {
+      if (pol.application_id && pol.policy_number) map[pol.application_id] = pol.policy_number;
+    }
+    setPolicyByAppId(map);
   }
 
   useEffect(() => {
@@ -279,6 +286,10 @@ export default function Quotes() {
   }
 
   const schema = selectedPlan?.risk_schema || [];
+
+  function appPolicyNumber(a: Application): string {
+    return a.policy_number || policyByAppId[a.id] || "";
+  }
 
   return (
     <div className="stack">
@@ -623,7 +634,7 @@ export default function Quotes() {
                 </td>
                 <td>{a.uw_decision || "—"}</td>
                 <td>{a.annual_premium}</td>
-                <td>{a.policy_number || "—"}</td>
+                <td>{appPolicyNumber(a) || "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -674,7 +685,7 @@ export default function Quotes() {
               </div>
               <div className="detail-row">
                 <span className="muted">Policy</span>
-                <strong className="mono">{selectedApp.policy_number || "—"}</strong>
+                <strong className="mono">{appPolicyNumber(selectedApp) || "—"}</strong>
               </div>
               {selectedApp.created_at && (
                 <div className="detail-row">
