@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
+import Pagination, { usePagination } from "../components/Pagination";
 import PartyDetails, { PartySummary } from "../components/PartyDetails";
 
 type Policy = {
@@ -29,6 +30,8 @@ export default function Policies() {
       .catch(console.error);
   }, []);
 
+  const policyPage = usePagination(policies);
+
   return (
     <div className="stack">
       <div className="hero">
@@ -47,7 +50,7 @@ export default function Policies() {
               </tr>
             </thead>
             <tbody>
-              {policies.map((p) => (
+              {policyPage.pageItems.map((p) => (
                 <tr
                   key={p.id}
                   style={{ cursor: "pointer", background: selected?.id === p.id ? "rgba(31,107,79,0.06)" : undefined }}
@@ -70,6 +73,13 @@ export default function Policies() {
               )}
             </tbody>
           </table>
+          <Pagination
+            page={policyPage.page}
+            totalPages={policyPage.totalPages}
+            total={policyPage.total}
+            pageSize={policyPage.pageSize}
+            onPageChange={policyPage.setPage}
+          />
         </div>
         <div className="panel stack">
           <h3>Policy details</h3>

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import api from "../api/client";
+import Pagination, { usePagination } from "../components/Pagination";
 import PartyDetails, { PartyCell, PartySummary } from "../components/PartyDetails";
 import { flattenRiskEntries } from "../utils/formatRisk";
 
@@ -291,6 +292,9 @@ export default function Quotes() {
     return a.policy_number || policyByAppId[a.id] || "";
   }
 
+  const quotePage = usePagination(quotes);
+  const appPage = usePagination(apps);
+
   return (
     <div className="stack">
       <div className="hero">
@@ -566,7 +570,7 @@ export default function Quotes() {
             </tr>
           </thead>
           <tbody>
-            {quotes.map((q) => (
+            {quotePage.pageItems.map((q) => (
               <tr key={q.id}>
                 <td>{q.product_code}</td>
                 <td><PartyCell party={q.owner} /></td>
@@ -591,6 +595,13 @@ export default function Quotes() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={quotePage.page}
+          totalPages={quotePage.totalPages}
+          total={quotePage.total}
+          pageSize={quotePage.pageSize}
+          onPageChange={quotePage.setPage}
+        />
       </div>
       <div className="panel">
         <h3>Applications</h3>
@@ -608,7 +619,7 @@ export default function Quotes() {
             </tr>
           </thead>
           <tbody>
-            {apps.map((a) => (
+            {appPage.pageItems.map((a) => (
               <tr
                 key={a.id}
                 className="clickable-row"
@@ -639,6 +650,13 @@ export default function Quotes() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={appPage.page}
+          totalPages={appPage.totalPages}
+          total={appPage.total}
+          pageSize={appPage.pageSize}
+          onPageChange={appPage.setPage}
+        />
       </div>
 
       {selectedApp && (

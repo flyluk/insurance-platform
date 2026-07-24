@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
+import Pagination, { usePagination } from "../components/Pagination";
 import { PartyCell, PartySummary } from "../components/PartyDetails";
 
 type Invoice = {
@@ -52,6 +53,10 @@ export default function Finance() {
     await refresh();
   }
 
+  const invoicePage = usePagination(invoices);
+  const disbursementPage = usePagination(disbursements);
+  const ledgerPage = usePagination(ledger);
+
   return (
     <div className="stack">
       <div className="hero">
@@ -72,7 +77,7 @@ export default function Finance() {
             </tr>
           </thead>
           <tbody>
-            {invoices.map((inv) => (
+            {invoicePage.pageItems.map((inv) => (
               <tr key={inv.id}>
                 <td>{inv.invoice_number}</td>
                 <td><PartyCell party={inv.owner} /></td>
@@ -94,6 +99,13 @@ export default function Finance() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={invoicePage.page}
+          totalPages={invoicePage.totalPages}
+          total={invoicePage.total}
+          pageSize={invoicePage.pageSize}
+          onPageChange={invoicePage.setPage}
+        />
       </div>
       <div className="panel">
         <h3>Claim disbursements</h3>
@@ -107,7 +119,7 @@ export default function Finance() {
             </tr>
           </thead>
           <tbody>
-            {disbursements.map((d) => (
+            {disbursementPage.pageItems.map((d) => (
               <tr key={d.id}>
                 <td>{d.claim_number}</td>
                 <td><PartyCell party={d.owner} /></td>
@@ -119,6 +131,13 @@ export default function Finance() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={disbursementPage.page}
+          totalPages={disbursementPage.totalPages}
+          total={disbursementPage.total}
+          pageSize={disbursementPage.pageSize}
+          onPageChange={disbursementPage.setPage}
+        />
       </div>
       <div className="panel">
         <h3>Ledger</h3>
@@ -130,7 +149,7 @@ export default function Finance() {
             </tr>
           </thead>
           <tbody>
-            {ledger.map((j) => (
+            {ledgerPage.pageItems.map((j) => (
               <tr key={j.id}>
                 <td>
                   <div>{j.memo}</div>
@@ -147,6 +166,13 @@ export default function Finance() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={ledgerPage.page}
+          totalPages={ledgerPage.totalPages}
+          total={ledgerPage.total}
+          pageSize={ledgerPage.pageSize}
+          onPageChange={ledgerPage.setPage}
+        />
       </div>
     </div>
   );

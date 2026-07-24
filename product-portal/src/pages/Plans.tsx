@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
+import Pagination, { usePagination } from "../components/Pagination";
 
 type Rider = {
   id: string;
@@ -72,6 +73,8 @@ export default function Plans() {
   });
 
   const selected = useMemo(() => plans.find((p) => p.id === selectedId) || null, [plans, selectedId]);
+  const planPage = usePagination(plans);
+  const ratePage = usePagination(rates);
 
   async function refresh() {
     const [p, r] = await Promise.all([
@@ -228,7 +231,7 @@ export default function Plans() {
               </tr>
             </thead>
             <tbody>
-              {plans.map((p) => (
+              {planPage.pageItems.map((p) => (
                 <tr key={p.id} className={p.id === selectedId ? "row-selected" : undefined}>
                   <td>
                     <button type="button" className="linkish" onClick={() => setSelectedId(p.id)}>
@@ -255,6 +258,13 @@ export default function Plans() {
               ))}
             </tbody>
           </table>
+          <Pagination
+            page={planPage.page}
+            totalPages={planPage.totalPages}
+            total={planPage.total}
+            pageSize={planPage.pageSize}
+            onPageChange={planPage.setPage}
+          />
         </div>
         <form className="panel stack" onSubmit={createPlan}>
           <h3>New {line} plan</h3>
@@ -377,7 +387,7 @@ export default function Plans() {
                 </tr>
               </thead>
               <tbody>
-                {rates.map((r) => (
+                {ratePage.pageItems.map((r) => (
                   <tr key={r.id}>
                     <td>{r.version_code}</td>
                     <td>${r.amount.toFixed(2)}</td>
@@ -397,6 +407,13 @@ export default function Plans() {
                 ))}
               </tbody>
             </table>
+            <Pagination
+              page={ratePage.page}
+              totalPages={ratePage.totalPages}
+              total={ratePage.total}
+              pageSize={ratePage.pageSize}
+              onPageChange={ratePage.setPage}
+            />
             <form className="stack" onSubmit={addRate}>
               <div className="grid-2">
                 <label>

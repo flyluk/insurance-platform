@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import api from "../api/client";
+import Pagination, { usePagination } from "../components/Pagination";
 import { PartyCell, PartySummary } from "../components/PartyDetails";
 
 type Invoice = {
@@ -43,6 +44,8 @@ export default function Billing() {
   useEffect(() => {
     refresh().catch(console.error);
   }, []);
+
+  const invoicePage = usePagination(invoices);
 
   async function onPay(e: FormEvent, inv: Invoice) {
     e.preventDefault();
@@ -102,7 +105,7 @@ export default function Billing() {
             </tr>
           </thead>
           <tbody>
-            {invoices.map((inv) => (
+            {invoicePage.pageItems.map((inv) => (
               <tr key={inv.id}>
                 <td>
                   <div>{inv.invoice_number}</div>
@@ -132,6 +135,13 @@ export default function Billing() {
             )}
           </tbody>
         </table>
+        <Pagination
+          page={invoicePage.page}
+          totalPages={invoicePage.totalPages}
+          total={invoicePage.total}
+          pageSize={invoicePage.pageSize}
+          onPageChange={invoicePage.setPage}
+        />
       </div>
 
       {payingId && (

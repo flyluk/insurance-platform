@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../components/AuthContext";
+import Pagination, { usePagination } from "../components/Pagination";
 import PartyDetails, { PartySummary } from "../components/PartyDetails";
 import { flattenRiskEntries } from "../utils/formatRisk";
 
@@ -249,6 +250,7 @@ export default function PolicyDetail() {
   }
 
   const isActive = policy.status === "ACTIVE";
+  const endorsementPage = usePagination(endorsements);
 
   return (
     <div className="stack">
@@ -519,7 +521,7 @@ export default function PolicyDetail() {
             </tr>
           </thead>
           <tbody>
-            {endorsements.map((e) => (
+            {endorsementPage.pageItems.map((e) => (
               <tr key={e.id}>
                 <td>{e.endorsement_type}</td>
                 <td>{e.description || "—"}</td>
@@ -541,6 +543,13 @@ export default function PolicyDetail() {
             )}
           </tbody>
         </table>
+        <Pagination
+          page={endorsementPage.page}
+          totalPages={endorsementPage.totalPages}
+          total={endorsementPage.total}
+          pageSize={endorsementPage.pageSize}
+          onPageChange={endorsementPage.setPage}
+        />
       </div>
     </div>
   );

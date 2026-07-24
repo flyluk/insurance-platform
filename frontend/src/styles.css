@@ -249,6 +249,21 @@ a.linkish { text-decoration: underline; }
 .login-card p { color: var(--muted); margin: 0 0 1.25rem; }
 .error { color: var(--bad); font-size: 0.9rem; }
 .muted { color: var(--muted); font-size: 0.9rem; }
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.pagination .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
 .hint {
   margin-top: 1rem;
   padding-top: 1rem;

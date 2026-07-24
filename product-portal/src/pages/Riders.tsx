@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
+import Pagination, { usePagination } from "../components/Pagination";
 
 type Rider = {
   id: string;
@@ -34,6 +35,8 @@ export default function Riders() {
   useEffect(() => {
     refresh().catch(console.error);
   }, [line]);
+
+  const riderPage = usePagination(riders);
 
   async function createRider(e: FormEvent) {
     e.preventDefault();
@@ -94,7 +97,7 @@ export default function Riders() {
               </tr>
             </thead>
             <tbody>
-              {riders.map((r) => (
+              {riderPage.pageItems.map((r) => (
                 <tr key={r.id}>
                   <td>{r.code}</td>
                   <td>{r.name}</td>
@@ -117,6 +120,13 @@ export default function Riders() {
               ))}
             </tbody>
           </table>
+          <Pagination
+            page={riderPage.page}
+            totalPages={riderPage.totalPages}
+            total={riderPage.total}
+            pageSize={riderPage.pageSize}
+            onPageChange={riderPage.setPage}
+          />
         </div>
         <form className="panel stack" onSubmit={createRider}>
           <h3>New {line} rider</h3>

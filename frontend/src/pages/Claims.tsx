@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import api from "../api/client";
+import Pagination, { usePagination } from "../components/Pagination";
 import PartyDetails, { PartyCell, PartySummary, partyLabel } from "../components/PartyDetails";
 
 type Policy = {
@@ -78,6 +79,9 @@ export default function Claims() {
     }
     loadDocs(selectedId).catch(console.error);
   }, [selectedId]);
+
+  const claimPage = usePagination(claims);
+  const docPage = usePagination(docs);
 
   async function openClaim(e: FormEvent) {
     e.preventDefault();
@@ -194,7 +198,7 @@ export default function Claims() {
             </tr>
           </thead>
           <tbody>
-            {claims.map((c) => (
+            {claimPage.pageItems.map((c) => (
               <tr
                 key={c.id}
                 style={{ cursor: "pointer", background: selectedId === c.id ? "rgba(44,74,124,0.06)" : undefined }}
@@ -240,6 +244,13 @@ export default function Claims() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={claimPage.page}
+          totalPages={claimPage.totalPages}
+          total={claimPage.total}
+          pageSize={claimPage.pageSize}
+          onPageChange={claimPage.setPage}
+        />
       </div>
 
       {selected && (
@@ -286,7 +297,7 @@ export default function Claims() {
               </tr>
             </thead>
             <tbody>
-              {docs.map((d) => (
+              {docPage.pageItems.map((d) => (
                 <tr key={d.id}>
                   <td>{d.filename}</td>
                   <td>
@@ -313,6 +324,13 @@ export default function Claims() {
               )}
             </tbody>
           </table>
+          <Pagination
+            page={docPage.page}
+            totalPages={docPage.totalPages}
+            total={docPage.total}
+            pageSize={docPage.pageSize}
+            onPageChange={docPage.setPage}
+          />
         </div>
       )}
     </div>

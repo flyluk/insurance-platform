@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
+import Pagination, { usePagination } from "../components/Pagination";
 import { PartyCell, PartySummary } from "../components/PartyDetails";
 
 type Policy = {
@@ -29,6 +30,15 @@ export default function Policies() {
     refresh().catch(console.error);
   }, []);
 
+  const {
+    page,
+    setPage,
+    pageSize,
+    total,
+    totalPages,
+    pageItems,
+  } = usePagination(policies);
+
   return (
     <div className="stack">
       <div className="hero">
@@ -50,7 +60,7 @@ export default function Policies() {
             </tr>
           </thead>
           <tbody>
-            {policies.map((p) => (
+            {pageItems.map((p) => (
               <tr key={p.id}>
                 <td>
                   <Link className="linkish" to={`/policies/${p.id}`}>
@@ -83,6 +93,13 @@ export default function Policies() {
             )}
           </tbody>
         </table>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );

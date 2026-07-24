@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
+import Pagination, { usePagination } from "../components/Pagination";
 import PartyDetails, { PartyCell, PartySummary } from "../components/PartyDetails";
 import { flattenRiskEntries } from "../utils/formatRisk";
 
@@ -113,6 +114,9 @@ export default function Underwriting() {
     setSelectedId(null);
   }
 
+  const queuePage = usePagination(queue);
+  const allPage = usePagination(all);
+
   return (
     <div className="stack">
       <div className="hero">
@@ -135,7 +139,7 @@ export default function Underwriting() {
             </tr>
           </thead>
           <tbody>
-            {queue.map((c) => (
+            {queuePage.pageItems.map((c) => (
               <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
                 <td>
                   <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
@@ -166,6 +170,13 @@ export default function Underwriting() {
             )}
           </tbody>
         </table>
+        <Pagination
+          page={queuePage.page}
+          totalPages={queuePage.totalPages}
+          total={queuePage.total}
+          pageSize={queuePage.pageSize}
+          onPageChange={queuePage.setPage}
+        />
       </div>
 
       <div className="panel">
@@ -182,7 +193,7 @@ export default function Underwriting() {
             </tr>
           </thead>
           <tbody>
-            {all.map((c) => (
+            {allPage.pageItems.map((c) => (
               <tr key={c.id} className={selectedId === c.id ? "row-selected" : undefined}>
                 <td>
                   <button type="button" className="linkish" onClick={() => setSelectedId(c.id)}>
@@ -202,6 +213,13 @@ export default function Underwriting() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={allPage.page}
+          totalPages={allPage.totalPages}
+          total={allPage.total}
+          pageSize={allPage.pageSize}
+          onPageChange={allPage.setPage}
+        />
       </div>
 
       {selectedId && (
