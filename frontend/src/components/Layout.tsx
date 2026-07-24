@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
 const links = [
+  { to: "/clients", label: "Clients", roles: ["agent", "claims", "admin"] },
   { to: "/quotes", label: "New Business", roles: ["agent", "admin"] },
   { to: "/underwriting", label: "Underwriting", roles: ["underwriter", "admin"] },
   { to: "/policies", label: "Policies", roles: ["agent", "admin", "underwriter"] },

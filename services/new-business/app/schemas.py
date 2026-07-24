@@ -17,6 +17,16 @@ class PartyCreate(BaseModel):
     gender: str = Field(min_length=1)
 
 
+class PartyUpdate(BaseModel):
+    full_name: str = Field(min_length=1)
+    email: str = Field(min_length=1)
+    phone: str = Field(min_length=1)
+    date_of_birth: str = Field(min_length=1)
+    address: str = Field(min_length=1)
+    id_number: str = Field(min_length=1)
+    gender: str = Field(min_length=1)
+
+
 class PartyOut(BaseModel):
     id: str
     full_name: str

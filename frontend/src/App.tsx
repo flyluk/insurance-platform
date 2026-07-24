@@ -8,6 +8,7 @@ import Underwriting from "./pages/Underwriting";
 import Policies from "./pages/Policies";
 import PolicyDetail from "./pages/PolicyDetail";
 import Claims from "./pages/Claims";
+import Clients from "./pages/Clients";
 import Finance from "./pages/Finance";
 
 function Private({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,7 @@ export default function App() {
         }
       >
         <Route index element={<Home />} />
+        <Route path="clients" element={<Clients />} />
         <Route path="quotes" element={<Quotes />} />
         <Route path="underwriting" element={<Underwriting />} />
         <Route path="policies" element={<Policies />} />

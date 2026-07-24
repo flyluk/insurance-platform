@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models import Application, Party, Quote
 from app.product_catalog import ProductCatalogError, validate_quote_selection
 from app.rating import rate_quote
-from app.schemas import ApplicationOut, PartyCreate, PartyOut, QuoteCreate, QuoteOut
+from app.schemas import ApplicationOut, PartyCreate, PartyOut, PartyUpdate, QuoteCreate, QuoteOut
 from insurance_shared.auth import make_auth_dependency
 from insurance_shared.events import enqueue_event
 from insurance_shared.metrics import record_event
@@ -18,6 +18,9 @@ router = APIRouter(prefix="/api/nb", tags=["new-business"])
 auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm)
 agent_auth = make_auth_dependency(settings.jwt_secret, settings.jwt_algorithm, "agent", "admin")
 client_search_auth = make_auth_dependency(
+    settings.jwt_secret, settings.jwt_algorithm, "agent", "claims", "admin"
+)
+client_manage_auth = make_auth_dependency(
     settings.jwt_secret, settings.jwt_algorithm, "agent", "claims", "admin"
 )
 
@@ -134,7 +137,7 @@ def list_parties(db: Session = Depends(get_db), user: dict = Depends(auth)):
             if row[0]:
                 ids.add(row[0])
         return db.query(Party).filter(Party.id.in_(ids)).order_by(Party.full_name).all()
-    return db.query(Party).order_by(Party.created_at.desc()).limit(200).all()
+    return db.query(Party).order_by(Party.full_name.asc()).limit(500).all()
 
 
 @router.get("/clients/search", response_model=list[PartyOut])
@@ -184,6 +187,23 @@ def get_party(party_id: str, db: Session = Depends(get_db), user: dict = Depends
     party = db.get(Party, party_id)
     if not party:
         raise HTTPException(404, "Party not found")
+    return party
+
+
+@router.put("/parties/{party_id}", response_model=PartyOut)
+def update_party(
+    party_id: str,
+    body: PartyUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(client_manage_auth),
+):
+    party = db.get(Party, party_id)
+    if not party:
+        raise HTTPException(404, "Party not found")
+    for key, value in body.model_dump().items():
+        setattr(party, key, value)
+    db.commit()
+    db.refresh(party)
     return party
 
 
